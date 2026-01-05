@@ -2,8 +2,30 @@
 import React from 'react';
 
 export type AIProvider = 'cloud' | 'local' | 'custom_api';
-export type AIStatus = 'ready' | 'not_installed' | 'error' | 'downloading' | 'optimizing';
-export type AICapability = 'text' | 'image' | 'video' | 'audio' | 'subtitles' | 'mastering' | 'voice_out';
+export type AIStatus = 'ready' | 'not_installed' | 'error' | 'downloading' | 'optimizing' | 'active';
+export type AICapability = 'text' | 'image' | 'video' | 'audio' | 'subtitles' | 'mastering' | 'voice_out' | 'scripting' | 'analytics' | 'bgm';
+
+export interface AIConfiguration {
+  id: string;
+  name: string;
+  provider: AIProvider;
+  modelName: string;
+  apiKey?: string;
+  priority: number;
+  isActive: boolean;
+  capabilities: AICapability[];
+}
+
+export interface AIWorker {
+  id: string;
+  name: string;
+  role: string;
+  size: string;
+  status: AIStatus;
+  progress: number;
+  vramUsageGb: number;
+  capability: AICapability;
+}
 
 export interface LocalModelDeployment {
   id: string;
@@ -16,30 +38,13 @@ export interface LocalModelDeployment {
   vramRequiredGb: number;
 }
 
-export interface AIConfiguration {
-  id: string;
-  name: string;
-  provider: AIProvider;
-  modelName: string;
-  apiKey?: string;
-  priority: number;
-  isActive: boolean;
-  capabilities: AICapability[];
-  inputCostPer1M: number;
-  outputCostPer1M: number;
-}
-
 export interface SystemSettings {
-  primaryEngine: AIProvider;
-  primaryBrainId: string; // O ID do modelo (Cloud ou Local) que atua como cérebro
-  fallbackEnabled: boolean;
-  voiceActivation: boolean;
-  voiceOutput: boolean;
-  wakeWord: string;
-  maxResolution: string;
-  autoSchedule: boolean;
+  primaryBrainId: string;
+  autoDownloadWorkers: boolean;
   activeModels: AIConfiguration[];
   localModels: LocalModelDeployment[];
+  installedWorkers: AIWorker[];
+  voiceActivation: boolean;
 }
 
 export interface HardwareStatus {
@@ -49,7 +54,6 @@ export interface HardwareStatus {
   vramTotalGb: number;
   gpuName: string;
   webGpuActive: boolean;
-  recommendedEngine: AIProvider;
 }
 
 export interface MarketingVariant { id: string; title: string; coverUrl: string; description: string; tags: string[]; hashtags: string[]; score: number; reasoning: string; aspectRatio: '16:9' | '9:16'; }

@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Story } from '../types';
 import { Icons, INITIAL_STORIES } from '../constants';
@@ -10,37 +10,40 @@ type ProjectType = 'story' | 'series';
 
 export default function Projetos() {
     const [activeTab, setActiveTab] = useState<ProjectType>('story');
-    const [stories, setStories] = useState<(Story & { isMiniSeries?: boolean })[]>(() => 
-        INITIAL_STORIES.map(s => ({ ...s }))
-    );
+    const [stories, setStories] = useState<(Story & { isMiniSeries?: boolean })[]>([]);
     const [isMetaModalOpen, setIsMetaModalOpen] = useState(false);
     const [selectedProject, setSelectedProject] = useState<any>(null);
     const [isGeneratingKit, setIsGeneratingKit] = useState<string | null>(null);
     const navigate = useNavigate();
 
+    const loadProjects = () => {
+        const saved = JSON.parse(localStorage.getItem('nexora_custom_projects_v1') || '[]');
+        // Mesclar com iniciais se necessário, mas priorizar os customizados
+        const all = saved.length > 0 ? saved : INITIAL_STORIES.map(s => ({ ...s }));
+        setStories(all);
+    };
+
+    useEffect(() => {
+        loadProjects();
+        // Escutar atualizações do Jabuti
+        window.addEventListener('nexora_projects_updated', loadProjects);
+        return () => window.removeEventListener('nexora_projects_updated', loadProjects);
+    }, []);
+
     const handleCreateProject = (type: ProjectType) => {
         const newProject: any = {
             id: `proj-${crypto.randomUUID()}`,
             title: type === 'series' ? 'Nova Mini-Série' : 'Nova História',
-            description: 'Defina a premissa deste novo projeto para que o Jabuti possa orquestrar as cenas.',
+            description: 'Defina a premissa deste novo projeto.',
             status: 'draft',
             scenes: [],
             characters: [],
             subtitleStyleId: 'cinematic',
             isMiniSeries: type === 'series'
         };
-        setStories(prev => [newProject, ...prev]);
-    };
-
-    const handleQuickLaunchKit = async (project: any) => {
-        setIsGeneratingKit(project.id);
-        try {
-            const kit = await generateProfessionalLaunchKit(project.title, project.description, 'cloud');
-            console.log("Kit de Lançamento:", kit);
-            alert(`Estratégia Viral Gerada para: ${project.title}\nTítulos: ${kit.viralTitles[0]}\nVer detalhes na seção de Exportação.`);
-        } finally {
-            setIsGeneratingKit(null);
-        }
+        const updated = [newProject, ...stories];
+        setStories(updated);
+        localStorage.setItem('nexora_custom_projects_v1', JSON.stringify(updated));
     };
 
     const filteredProjects = stories.filter(p => activeTab === 'series' ? p.isMiniSeries : !p.isMiniSeries);
@@ -61,7 +64,7 @@ export default function Projetos() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredProjects.map(project => (
-                    <div key={project.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 hover:border-slate-700 transition-colors group flex flex-col shadow-xl min-h-[340px]">
+                    <div key={project.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 hover:border-slate-700 transition-colors group flex flex-col shadow-xl min-h-[340px] animate-in zoom-in-95">
                         <div className="flex-1">
                             <div className="flex gap-2 mb-3">
                                 <span className={`text-[9px] font-black uppercase tracking-tighter px-1.5 py-0.5 rounded border ${project.isMiniSeries ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'}`}>
@@ -74,18 +77,14 @@ export default function Projetos() {
 
                         <div className="space-y-3 pt-4 border-t border-slate-800">
                             <div className="flex justify-between items-center text-[10px] text-slate-500 font-bold uppercase">
-                                <span>{project.scenes.length} CENAS</span>
-                                <button 
-                                    onClick={() => handleQuickLaunchKit(project)}
-                                    disabled={isGeneratingKit === project.id}
-                                    className="text-blue-400 hover:text-white transition-colors flex items-center gap-1"
-                                >
-                                    {isGeneratingKit === project.id ? 'PROCESSANDO...' : <><Icons.Sparkles /> ESTRATÉGIA VIRAL</>}
-                                </button>
+                                <span>{project.scenes?.length || 0} CENAS</span>
+                                <div className="text-blue-400 flex items-center gap-1">
+                                    <Icons.Sparkles /> ESTRATÉGIA ATIVA
+                                </div>
                             </div>
                             <div className="grid grid-cols-2 gap-2">
                                 <Link to={`/roteiro/${project.id}`} className="py-2.5 bg-slate-800 hover:bg-slate-700 rounded-xl text-center text-xs font-bold text-white transition-colors">EDITAR</Link>
-                                <button onClick={() => navigate('/exportacao')} className="py-2.5 bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 border border-blue-500/20 rounded-xl text-xs font-bold transition-colors">EXPORTAR 4K</button>
+                                <button onClick={() => navigate('/exportacao')} className="py-2.5 bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 border border-blue-500/20 rounded-xl text-xs font-bold transition-colors">EXPORTAR</button>
                             </div>
                         </div>
                     </div>
@@ -96,7 +95,7 @@ export default function Projetos() {
                     className="border-2 border-dashed border-slate-800 hover:border-blue-500 rounded-2xl p-8 flex flex-col items-center justify-center gap-3 text-slate-600 hover:text-blue-400 transition-all bg-slate-900/20 min-h-[340px]"
                 >
                     <div className="p-4 bg-slate-800/50 rounded-full"><Icons.Plus /></div>
-                    <span className="font-bold uppercase text-[10px] tracking-widest text-slate-500">Novo Projeto</span>
+                    <span className="font-bold uppercase text-[10px] tracking-widest text-slate-500">Adicionar {activeTab === 'series' ? 'Série' : 'História'}</span>
                 </button>
             </div>
 

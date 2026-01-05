@@ -41,7 +41,7 @@ export const router = createHashRouter([
       { path: "canais", element: <CanaisPage /> },
       { path: "projetos", element: <ProjetosPage /> },
       { path: "roteiro/:storyId", element: <RoteirosPage /> },
-      { path: "elenco", element: <CastingPage /> },
+      { path: "personagens", element: <CastingPage /> },
       { path: "visuais", element: <VisuaisPage /> },
       { path: "dialogos", element: <DialogueLab /> },
       { path: "video", element: <VideoLabPage /> },

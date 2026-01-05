@@ -41,6 +41,9 @@ export default function Sidebar({ onToggleAssistant }: SidebarProps) {
         <NavLink to="/projetos" className={getLinkClass}>
            <Icons.Stories /> Projetos
         </NavLink>
+        <NavLink to="/personagens" className={getLinkClass}>
+           <Icons.Brain /> Personagens
+        </NavLink>
         <NavLink to="/relatorio-growth" className={getLinkClass}>
            <Icons.Analytics /> Growth
         </NavLink>
@@ -62,7 +65,6 @@ export default function Sidebar({ onToggleAssistant }: SidebarProps) {
         </NavLink>
       </nav>
 
-      {/* JABUTI STATUS / TOGGLE BOTÃO */}
       <div className="mt-auto pt-6 px-2">
         <div className="mb-4 px-4 flex items-center justify-between">
             <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Engine Ativo</span>

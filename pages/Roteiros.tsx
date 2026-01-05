@@ -2,8 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Story, Scene } from '../types';
-import { Icons, INITIAL_SERIES, INITIAL_STORIES, SUBTITLE_STYLES } from '../constants';
-import { generateStructuredScript, generateBgmMood, generateScenes } from '../services/geminiService';
+import { Icons, INITIAL_SERIES, INITIAL_STORIES } from '../constants';
+import { generateStructuredScript, generateScenes, ensureWorker } from '../services/geminiService';
 import SceneBlock from '../components/Storyboard/SceneBlock';
 
 export default function Roteiros() {
@@ -13,6 +13,7 @@ export default function Roteiros() {
   const [story, setStory] = useState<Story | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [activeTab, setActiveTab] = useState<'script' | 'visual'>('script');
+  const [workerProgress, setWorkerProgress] = useState<number | null>(null);
 
   useEffect(() => {
     const allStories = [...INITIAL_SERIES.flatMap(s => s.stories), ...INITIAL_STORIES];
@@ -23,7 +24,13 @@ export default function Roteiros() {
   const handleAutoPipeline = async () => {
     if (!story) return;
     setIsProcessing(true);
+    
     try {
+      // 1. Delegar para Worker Local (ou baixar se necessário)
+      await ensureWorker('scripting', (p) => setWorkerProgress(p));
+      setWorkerProgress(null);
+
+      // 2. Executar pipeline
       const scriptRes = await generateStructuredScript(story.title, story.description);
       const scenesRes = await generateScenes(story.title, story.description);
       
@@ -51,7 +58,7 @@ export default function Roteiros() {
   if (!story) return <div className="p-20 text-center text-slate-500 font-black uppercase tracking-widest">Carregando Projeto...</div>;
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-700">
+    <div className="space-y-8 animate-in fade-in duration-700 pb-20">
       <div className="flex justify-between items-end">
         <div>
           <h2 className="text-3xl font-bold mb-2 text-white">{story.title}</h2>
@@ -61,25 +68,29 @@ export default function Roteiros() {
           </div>
         </div>
         <div className="flex gap-3">
-            <button onClick={handleAutoPipeline} disabled={isProcessing} className="flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 rounded-2xl font-bold transition-all shadow-lg text-white">
-                {isProcessing ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Icons.Sparkles />}
-                Orquestrar via IA
+            <button onClick={handleAutoPipeline} disabled={isProcessing} className="flex items-center gap-2 px-8 py-3 bg-blue-600 hover:bg-blue-500 rounded-2xl font-bold transition-all shadow-xl text-white text-xs uppercase tracking-widest">
+                {isProcessing ? (
+                    workerProgress !== null ? `Baixando Especialista: ${workerProgress}%` : 'Processando...'
+                ) : (
+                    <><Icons.Sparkles /> Orquestrar Enxame</>
+                )}
             </button>
         </div>
       </div>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 min-h-[600px] shadow-2xl">
+      <div className="bg-slate-900 border border-slate-800 rounded-[40px] p-10 min-h-[600px] shadow-2xl">
           {activeTab === 'script' ? (
-              <div className="max-w-3xl mx-auto space-y-12 py-10">
+              <div className="max-w-3xl mx-auto space-y-12">
                   <textarea 
                     value={story.description}
                     onChange={(e) => setStory({...story, description: e.target.value})}
-                    className="w-full bg-transparent border-none focus:ring-0 text-xl text-slate-300 leading-relaxed font-serif min-h-[400px] resize-none"
-                    placeholder="Escreva a premissa ou roteiro aqui..."
+                    className="w-full bg-transparent border-none focus:ring-0 text-xl text-slate-300 leading-relaxed font-serif min-h-[500px] resize-none"
+                    placeholder="Escreva a premissa aqui. O Jabuti usará um Worker local de narrativa para expandir..."
+                    style={{ fontFamily: '"Courier Prime", Courier, monospace' }}
                   />
               </div>
           ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                   {story.scenes.map((scene, idx) => (
                     <SceneBlock 
                         key={scene.id}
@@ -94,9 +105,9 @@ export default function Roteiros() {
                         isLast={idx === story.scenes.length - 1}
                     />
                   ))}
-                  <button onClick={() => {}} className="border-2 border-dashed border-slate-800 rounded-2xl aspect-video flex flex-col items-center justify-center text-slate-600 hover:text-blue-500 hover:border-blue-500 transition-all">
+                  <button onClick={() => {}} className="border-2 border-dashed border-slate-800 rounded-[32px] aspect-video flex flex-col items-center justify-center text-slate-700 hover:text-blue-500 hover:border-blue-500 transition-all bg-slate-950/20">
                     <Icons.Plus />
-                    <span className="text-[10px] font-black uppercase tracking-widest mt-2">Nova Cena</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest mt-4">Adicionar Cena</span>
                   </button>
               </div>
           )}

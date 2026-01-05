@@ -1,167 +1,52 @@
 
 .jabuti-container {
-  width: 200px;
-  height: 200px;
+  width: 100%;
+  height: 100%;
   position: relative;
-  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .jabuti-svg {
   width: 100%;
   height: 100%;
+  filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3));
 }
 
-.jabuti-main-group, .jabuti-head-group, .jabuti-eyes, .jabuti-mouth, .jabuti-pupil, .jabuti-arm-left, .jabuti-arm-right, .jabuti-laptop-scene {
-    transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s ease;
+.jabuti-main-group, .jabuti-head-group, .jabuti-eyes, .jabuti-mouth, .jabuti-shell {
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-
-/* --- BASE VISIBILITY --- */
-.jabuti-prop-mug, .jabuti-laptop-scene, .jabuti-prop-glitch-screen {
-    opacity: 0;
-    pointer-events: none;
-}
+/* --- ESCALA REDUZIDA PARA UI --- */
 .jabuti-main-group {
-    opacity: 1;
-}
-.jabuti-mouth--smile {
-    opacity: 1;
-    transition: opacity 0.3s;
-}
-.jabuti-mouth--frown {
-    opacity: 0;
-    transition: opacity 0.3s;
-}
-
-/* --- SUB-STATES (override base visibility) --- */
-.substate--web-search .jabuti-laptop-scene {
-    opacity: 1;
-}
-.substate--web-search .jabuti-main-group {
-    opacity: 0;
+    transform-origin: center bottom;
 }
 
 /* --- IDLE STATE --- */
 .state--idle .jabuti-main-group {
   animation: idle-breathe 4s ease-in-out infinite;
 }
-.state--idle .jabuti-eyes {
-  animation: idle-blink 5s ease-in-out infinite;
-  animation-delay: 0.5s;
-}
 @keyframes idle-breathe {
-  0%, 100% { transform: translateY(0) scaleY(1); }
-  50% { transform: translateY(-4px) scaleY(1.02); }
-}
-@keyframes idle-blink {
-  0%, 95%, 100% { transform: scaleY(1); transform-origin: center center; }
-  97.5% { transform: scaleY(0.1); transform-origin: center center; }
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px) scaleY(1.01); }
 }
 
-/* --- LISTENING STATE --- */
-.state--listening .jabuti-head-group {
-  transform: translateY(-8px) rotate(-10deg);
-}
-.state--listening .jabuti-arm-left {
-  transform: rotate(40deg) translate(-25px, -60px) scale(0.9);
-  transform-origin: 100px 180px;
-}
-.state--listening .jabuti-mouth--smile {
-  transform: scaleY(0.5) translateY(8px);
-  transform-origin: center;
-}
-
-/* --- THINKING STATE (COFFEE) --- */
-.state--thinking .jabuti-prop-mug {
-  opacity: 1;
-}
-.state--thinking .jabuti-arm-right {
-  animation: drink-coffee 5s ease-in-out infinite;
-  transform-origin: 205px 180px;
-}
+/* --- THINKING STATE --- */
 .state--thinking .jabuti-head-group {
-  animation: think-head-tilt 5s ease-in-out infinite;
+  animation: think-rotate 3s ease-in-out infinite;
+  transform-origin: center 150px;
 }
-@keyframes drink-coffee {
-  0%, 20%, 100% { transform: rotate(0deg); }
-  40%, 80% { transform: rotate(-45deg) translate(5px, -10px); }
+@keyframes think-rotate {
+  0%, 100% { transform: rotate(0); }
+  50% { transform: rotate(8deg) translateY(-2px); }
 }
-@keyframes think-head-tilt {
-  0%, 20%, 100% { transform: rotate(0deg); }
-  40%, 80% { transform: rotate(10deg) translateY(-5px); }
-}
-
-/* --- THINKING STATE (WEB SEARCH) --- */
-.state--thinking.substate--web-search .laptop-screen {
-    animation: screen-glow 3s infinite;
-}
-.state--thinking.substate--web-search .typing-hand-l {
-    animation: typing 0.5s infinite alternate;
-}
-.state--thinking.substate--web-search .typing-hand-r {
-    animation: typing 0.5s infinite alternate-reverse;
-}
-.state--thinking.substate--web-search .jabuti-typing-body {
-    animation: typing-body-bob 2s infinite ease-in-out;
-}
-@keyframes screen-glow {
-    0%, 100% { fill: #0f172a; box-shadow: none; }
-    50% { fill: #1d2842; box-shadow: 0 0 20px #60a5fa; }
-}
-@keyframes typing {
-    from { transform: translateY(0); }
-    to { transform: translateY(-5px); }
-}
-@keyframes typing-body-bob {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(3px); }
-}
-
 
 /* --- SPEAKING STATE --- */
-.state--speaking .jabuti-head-group {
-  animation: speaking-bob 0.4s ease-in-out infinite;
-}
 .state--speaking .jabuti-mouth--smile {
-  animation: speaking-mouth 0.4s ease-in-out infinite;
-  transform-origin: center;
+  animation: speak-mouth 0.2s ease-in-out infinite alternate;
 }
-@keyframes speaking-bob {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-5px); }
-}
-@keyframes speaking-mouth {
-  0%, 100% { transform: scaleY(1); }
-  50% { transform: scaleY(0.3) translateY(4px); }
-}
-
-/* --- ERROR STATE --- */
-.state--error .jabuti-prop-glitch-screen {
-    opacity: 1;
-    transition-delay: 0.3s;
-}
-.state--error .jabuti-head-group {
-    transform: rotate(5deg) translateX(3px) translateY(2px);
-}
-.state--error .jabuti-mouth--smile {
-    opacity: 0;
-}
-.state--error .jabuti-mouth--frown {
-    opacity: 1;
-}
-.state--error .glitch-line-1 {
-    animation: glitch1 0.4s linear infinite alternate;
-}
-.state--error .glitch-line-2 {
-    animation: glitch2 0.6s linear infinite alternate-reverse;
-}
-@keyframes glitch1 {
-    0% { transform: translateX(0) scaleY(1); opacity: 1; }
-    50% { transform: translateX(3px) scaleY(0.2); opacity: 0.5; }
-    100% { transform: translateX(-3px) scaleY(1.5); opacity: 1; }
-}
-@keyframes glitch2 {
-    0% { transform: translateY(0); opacity: 0.8; }
-    50% { transform: translateY(-2px); opacity: 0.4; }
-    100% { transform: translateY(2px); opacity: 0.8; }
+@keyframes speak-mouth {
+  from { transform: scaleY(1); }
+  to { transform: scaleY(0.4) translateY(2px); }
 }

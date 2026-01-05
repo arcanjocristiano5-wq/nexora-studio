@@ -12,45 +12,31 @@ interface State {
 }
 
 /**
- * ErrorBoundary component for catching errors in child components.
- * Strictly follows React.Component class definition to ensure property inheritance.
+ * ErrorBoundary componente para capturar anomalias no fluxo da NEXORA.
  */
+// Fix: Explicitly extend Component from 'react' to ensure TypeScript recognizes the inheritance and provides access to 'props' and 'setState'.
 class ErrorBoundary extends Component<Props, State> {
-  constructor(props: Props) {
-    super(props);
-    this.state = {
-      hasError: false,
-      error: null,
-    };
-  }
+  public state: State = {
+    hasError: false,
+    error: null,
+  };
 
-  /**
-   * Update state so the next render will show the fallback UI.
-   */
   public static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
   }
 
-  /**
-   * Log the error to an error reporting service.
-   */
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("Uncaught error:", error, errorInfo);
+    console.error("Jabuti detectou anomalia crítica:", error, errorInfo);
   }
   
-  /**
-   * Resets the error boundary state and reloads the application.
-   */
   private handleReset = () => {
-    // setState is inherited from React.Component
+    // Fix: Using setState inherited from the base Component class.
     this.setState({ hasError: false, error: null });
     window.location.reload();
   }
 
-  /**
-   * Standard React render method.
-   */
   public render() {
+    // Fix: Accessing state inherited from the base Component class.
     const { hasError, error } = this.state;
     
     if (hasError && error) {
@@ -62,7 +48,7 @@ class ErrorBoundary extends Component<Props, State> {
       );
     }
 
-    // props is inherited from React.Component
+    // Fix: Accessing props inherited from the base Component class.
     return this.props.children;
   }
 }

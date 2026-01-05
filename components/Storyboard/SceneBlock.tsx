@@ -1,8 +1,9 @@
 
 import React, { useState, memo } from 'react';
-import { Scene, Story } from '../../types';
-import { generateSceneVisual, generateScript } from '../../services/geminiService';
-import { Icons } from '../../constants';
+import { Scene } from '../../types';
+// Fixed: generateSceneVisual was not exported, using generateConceptArt instead.
+import { generateConceptArt, generateScript } from '../../services/geminiService';
+import { Icons, VISUAL_STYLES } from '../../constants';
 
 interface SceneBlockProps {
   scene: Scene;
@@ -36,7 +37,10 @@ const SceneBlock: React.FC<SceneBlockProps> = ({
   const handleGenerateImage = async () => {
     setIsGenerating(true);
     try {
-      const url = await generateSceneVisual(`${scene.title}: ${scene.description}`, visualStyleId);
+      // Fixed: generateSceneVisual replaced with generateConceptArt. 
+      // We look up the style name from VISUAL_STYLES using visualStyleId.
+      const styleName = VISUAL_STYLES.find(s => s.id === visualStyleId)?.name || 'Digital Art';
+      const url = await generateConceptArt(`${scene.title}: ${scene.description}`, styleName);
       if (url) onUpdate(scene.id, { imageUrl: url });
     } catch (error) {
       console.error("Erro ao gerar imagem", error);
