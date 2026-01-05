@@ -15,7 +15,7 @@ interface State {
  * ErrorBoundary component for catching errors in child components.
  * Fix: Correctly extending React.Component with proper type parameters to resolve state and props errors.
  */
-class ErrorBoundary extends React.Component<Props, State> {
+class ErrorBoundary extends Component<Props, State> {
   // Use constructor for initial state
   constructor(props: Props) {
     super(props);

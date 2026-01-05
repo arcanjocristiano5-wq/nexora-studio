@@ -1,36 +1,30 @@
 
 import React from 'react';
 
-export type AIProvider = 'cloud' | 'local';
+export type AIProvider = 'cloud' | 'local' | 'custom_api';
 export type AIStatus = 'ready' | 'not_installed' | 'error' | 'downloading' | 'optimizing';
-export type AICapability = 'text' | 'image' | 'video' | 'audio' | 'subtitles' | 'mastering';
+export type AICapability = 'text' | 'image' | 'video' | 'audio' | 'subtitles' | 'mastering' | 'voice_out';
 
 export interface AIConfiguration {
   id: string;
   name: string;
   provider: AIProvider;
   modelName: string;
+  apiKey?: string;
   priority: number;
   isActive: boolean;
+  capabilities: AICapability[];
 }
 
 export interface SystemSettings {
   primaryEngine: AIProvider;
   fallbackEnabled: boolean;
   voiceActivation: boolean;
+  voiceOutput: boolean;
   wakeWord: string;
   maxResolution: string;
   autoSchedule: boolean;
   activeModels: AIConfiguration[];
-}
-
-export interface HardwareStatus {
-  tier: 'Bronze' | 'Prata' | 'Ouro' | 'Platina';
-  score: number;
-  vramEstimate: string;
-  gpuName: string;
-  webGpuActive: boolean;
-  recommendedEngine: AIProvider;
 }
 
 export interface MarketingVariant {
@@ -42,12 +36,23 @@ export interface MarketingVariant {
   hashtags: string[];
   score: number;
   reasoning: string;
+  aspectRatio: '16:9' | '9:16';
 }
 
 export interface MarketingPackage {
   projectId: string;
+  platform: 'youtube' | 'tiktok' | 'instagram';
   variants: MarketingVariant[];
   selectedVariantId?: string;
+}
+
+export interface HardwareStatus {
+  tier: 'Bronze' | 'Prata' | 'Ouro' | 'Platina';
+  score: number;
+  vramEstimate: string;
+  gpuName: string;
+  webGpuActive: boolean;
+  recommendedEngine: AIProvider;
 }
 
 export interface Character {
@@ -97,8 +102,6 @@ export interface Series {
   visualStyleId?: string;
 }
 
-// Fixed missing types: VisualStyle, SubtitleStyle, AIModel, VideoItem, LocationInspiration, VoiceProfile, VideoMetadata, AnalysisResult
-
 export interface VisualStyle {
   id: string;
   name: string;
@@ -135,30 +138,35 @@ export interface VideoItem {
   timestamp: Date;
 }
 
+// Added missing LocationInspiration type
 export interface LocationInspiration {
   title: string;
   uri: string;
   snippet?: string;
 }
 
+// Added missing VoiceProfile type
 export interface VoiceProfile {
   name: string;
   apiName: string;
-  gender: 'Feminino' | 'Masculino';
+  gender: string;
   tone: string;
   type: 'prebuilt' | 'cloned';
   isFavorite: boolean;
 }
 
+// Added missing AnalysisResult type
+export interface AnalysisResult {
+  bestTitle: string;
+  bestPlatform: string;
+  bestCoverIndex: number;
+  reasoning: string;
+}
+
+// Added missing VideoMetadata type
 export interface VideoMetadata {
   titles: string[];
   description: string;
   tags: string[];
-}
-
-export interface AnalysisResult {
-  bestTitle: string;
-  bestCoverIndex: number;
-  bestPlatform: string;
-  reasoning: string;
+  hashtags: string[];
 }
