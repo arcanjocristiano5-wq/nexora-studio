@@ -31,6 +31,7 @@ export interface AIConfiguration {
 
 export interface SystemSettings {
   primaryEngine: AIProvider;
+  primaryBrainId: string; // O ID do modelo (Cloud ou Local) que atua como cérebro
   fallbackEnabled: boolean;
   voiceActivation: boolean;
   voiceOutput: boolean;
@@ -39,23 +40,6 @@ export interface SystemSettings {
   autoSchedule: boolean;
   activeModels: AIConfiguration[];
   localModels: LocalModelDeployment[];
-}
-
-export interface Channel {
-  id: string;
-  name: string;
-  url: string;
-  platform: 'youtube' | 'tiktok' | 'instagram' | 'website' | 'custom';
-  guidelines: string;
-  toneProfile: string;
-  authMethod: 'oauth' | 'login' | 'webhook';
-  credentials?: {
-    username?: string;
-    password?: string;
-    webhookUrl?: string;
-    token?: string;
-    siteUrl?: string;
-  };
 }
 
 export interface HardwareStatus {
@@ -68,7 +52,6 @@ export interface HardwareStatus {
   recommendedEngine: AIProvider;
 }
 
-// Re-exportando interfaces de suporte
 export interface MarketingVariant { id: string; title: string; coverUrl: string; description: string; tags: string[]; hashtags: string[]; score: number; reasoning: string; aspectRatio: '16:9' | '9:16'; }
 export interface MarketingPackage { projectId: string; platform: 'youtube' | 'tiktok' | 'instagram'; variants: MarketingVariant[]; selectedVariantId?: string; }
 export interface Character { id: string; name: string; role: string; description: string; visualTraits: string; voiceProfileName?: string; isFixed: boolean; referenceImageUrl?: string; metadata?: any; }
@@ -83,3 +66,4 @@ export interface LocationInspiration { title: string; uri: string; snippet?: str
 export interface VoiceProfile { name: string; apiName: string; gender: string; tone: string; type: 'prebuilt' | 'cloned'; isFavorite: boolean; }
 export interface AnalysisResult { bestTitle: string; bestPlatform: string; bestCoverIndex: number; reasoning: string; }
 export interface VideoMetadata { titles: string[]; description: string; }
+export interface Channel { id: string; name: string; url: string; platform: string; guidelines: string; toneProfile: string; authMethod: 'oauth' | 'login' | 'webhook'; credentials?: any; }

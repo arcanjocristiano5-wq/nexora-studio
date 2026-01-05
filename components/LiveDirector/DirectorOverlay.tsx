@@ -21,7 +21,8 @@ const DirectorOverlay: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       const outputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       audioContextsRef.current = { input: inputCtx, output: outputCtx };
 
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+      // Initialize GoogleGenAI with API key from environment exclusively
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       
       const sessionPromise = ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-09-2025',
@@ -41,6 +42,7 @@ const DirectorOverlay: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             scriptProcessor.onaudioprocess = (e) => {
               const inputData = e.inputBuffer.getChannelData(0);
               const pcmBlob = createPcmBlob(inputData);
+              // Guidelines: Ensure data is streamed only after the session promise resolves
               sessionPromise.then(session => {
                 session.sendRealtimeInput({ media: pcmBlob });
               });

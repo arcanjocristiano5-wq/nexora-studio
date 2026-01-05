@@ -2,41 +2,77 @@
 import React, { useState, useEffect } from 'react';
 import { Icons } from '../constants';
 import { SystemSettings, HardwareStatus, AIConfiguration, LocalModelDeployment, AICapability } from '../types';
-import { performHardwareBenchmark, downloadLocalModel } from '../services/geminiService';
+import { performHardwareBenchmark, downloadLocalModel, checkKey, openKeySelection } from '../services/geminiService';
 import Jabuti from '../components/Brand/Jabuti';
 
 const INITIAL_LOCAL_MODELS: LocalModelDeployment[] = [
-  { id: 'l1', name: 'Jabuti Nano (Llama 3 8B)', size: '4.7GB', status: 'ready', progress: 100, type: 'core', capability: 'text', vramRequiredGb: 5.5 },
+  { id: 'l1', name: 'Jabuti Brain (Llama 3.1 8B)', size: '4.8GB', status: 'ready', progress: 100, type: 'core', capability: 'text', vramRequiredGb: 6.0 },
 ];
 
 export default function Settings() {
     const [settings, setSettings] = useState<SystemSettings>(() => {
-        const saved = localStorage.getItem('nexora_system_settings_v3');
+        const saved = localStorage.getItem('nexora_system_settings_v4');
         return saved ? JSON.parse(saved) : { 
           primaryEngine: 'cloud', 
-          fallbackEnabled: true,
-          voiceActivation: true,
-          voiceOutput: true,
-          wakeWord: 'Jabuti',
-          maxResolution: '4K',
-          autoSchedule: true,
+          primaryBrainId: '1',
           activeModels: [
-            { id: '1', name: 'Jabuti Cloud Master', provider: 'cloud', modelName: 'gemini-3-pro-preview', priority: 1, isActive: true, capabilities: ['text', 'video'], inputCostPer1M: 0.50, outputCostPer1M: 1.50 },
-            { id: '2', name: 'Stable Diffusion Cloud', provider: 'cloud', modelName: 'imagen-3', priority: 2, isActive: true, capabilities: ['image'], inputCostPer1M: 1.00, outputCostPer1M: 2.50 },
+            { id: '1', name: 'Cloud Master', provider: 'cloud', modelName: 'gemini-3-pro-preview', priority: 1, isActive: true, capabilities: ['text', 'video'], inputCostPer1M: 0.50, outputCostPer1M: 1.50 },
           ],
           localModels: INITIAL_LOCAL_MODELS
         };
     });
 
     const [hw, setHw] = useState<HardwareStatus | null>(null);
-    const [isInjecting, setIsInjecting] = useState(false);
-    const [searchModel, setSearchModel] = useState('');
-    const [activeTab, setActiveTab] = useState<'economics' | 'swarm'>('economics');
+    const [activeTab, setActiveTab] = useState<'cloud' | 'local' | 'economics'>('cloud');
+    const [isForgeOpen, setIsForgeOpen] = useState(false);
+    
+    // Estados para novos modelos
+    const [newCloudModel, setNewCloudModel] = useState({ name: '', modelName: '', apiKey: '' });
+    const [newLocalModel, setNewLocalModel] = useState({ name: '', size: '', vram: 4 });
 
     useEffect(() => {
-        localStorage.setItem('nexora_system_settings_v3', JSON.stringify(settings));
+        localStorage.setItem('nexora_system_settings_v4', JSON.stringify(settings));
         performHardwareBenchmark().then(setHw);
     }, [settings]);
+
+    const handleSetPrimaryBrain = (id: string) => {
+        setSettings({ ...settings, primaryBrainId: id });
+    };
+
+    const handleAddCloudModel = () => {
+        if (!newCloudModel.modelName || !newCloudModel.name) return;
+        const model: AIConfiguration = {
+            id: crypto.randomUUID(),
+            name: newCloudModel.name,
+            provider: 'cloud',
+            modelName: newCloudModel.modelName,
+            apiKey: newCloudModel.apiKey,
+            priority: settings.activeModels.length + 1,
+            isActive: true,
+            capabilities: ['text'],
+            inputCostPer1M: 0.1,
+            outputCostPer1M: 0.2
+        };
+        setSettings(prev => ({ ...prev, activeModels: [...prev.activeModels, model] }));
+        setNewCloudModel({ name: '', modelName: '', apiKey: '' });
+        setIsForgeOpen(false);
+    };
+
+    const handleAddLocalModel = () => {
+        const model: LocalModelDeployment = {
+            id: crypto.randomUUID(),
+            name: newLocalModel.name,
+            size: newLocalModel.size,
+            status: 'not_installed',
+            progress: 0,
+            type: 'specialized',
+            capability: 'text',
+            vramRequiredGb: newLocalModel.vram
+        };
+        setSettings(prev => ({ ...prev, localModels: [...prev.localModels, model] }));
+        setNewLocalModel({ name: '', size: '', vram: 4 });
+        setIsForgeOpen(false);
+    };
 
     const handleModelDownload = async (modelId: string) => {
         setSettings(prev => ({
@@ -55,156 +91,121 @@ export default function Settings() {
         }));
     };
 
-    const handleAutoInject = () => {
-        if (!searchModel) return;
-        setIsInjecting(true);
-        
-        // Simulação do Jabuti buscando nos repositórios (HuggingFace/Github)
-        setTimeout(() => {
-            const newModel: LocalModelDeployment = {
-                id: crypto.randomUUID(),
-                name: searchModel,
-                size: `${(Math.random() * 10 + 1).toFixed(1)}GB`,
-                status: 'not_installed',
-                progress: 0,
-                type: 'specialized',
-                capability: 'text',
-                vramRequiredGb: Math.floor(Math.random() * 8) + 2
-            };
-            setSettings(prev => ({...prev, localModels: [...prev.localModels, newModel]}));
-            setIsInjecting(false);
-            setSearchModel('');
-            handleModelDownload(newModel.id);
-        }, 1500);
-    };
-
-    const updateCost = (id: string, field: 'inputCostPer1M' | 'outputCostPer1M', val: number) => {
-        setSettings(prev => ({
-            ...prev,
-            activeModels: prev.activeModels.map(m => m.id === id ? { ...m, [field]: val } : m)
-        }));
-    };
-
-    const vramActive = settings.localModels
-        .filter(m => m.status === 'ready')
-        .reduce((acc, curr) => acc + curr.vramRequiredGb, 0);
-
     return (
         <div className="space-y-10 pb-20 animate-in fade-in duration-700">
             <div className="flex justify-between items-end">
                 <div>
                     <h2 className="text-4xl font-black text-white uppercase tracking-tighter">Command Cockpit</h2>
-                    <p className="text-slate-400 font-medium">Controle financeiro e expansão neural do Jabuti.</p>
+                    <p className="text-slate-400 font-medium">Orquestração de modelos em nuvem e Workers locais.</p>
                 </div>
-                <div className="w-16 h-16">
-                    <Jabuti state={isInjecting ? 'thinking' : 'idle'} subState={isInjecting ? 'web-search' : undefined} />
-                </div>
+                <button 
+                    onClick={() => setIsForgeOpen(true)}
+                    className="px-8 py-4 bg-blue-600 hover:bg-blue-500 rounded-2xl font-black text-white uppercase text-xs tracking-widest shadow-2xl flex items-center gap-3"
+                >
+                    <Icons.Plus /> Injetar Novo Modelo
+                </button>
             </div>
 
-            <div className="flex bg-slate-900 p-1 rounded-2xl border border-slate-800 w-fit">
-                <button onClick={() => setActiveTab('economics')} className={`px-8 py-3 rounded-xl text-xs font-black uppercase transition-all ${activeTab === 'economics' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>Token Economics</button>
-                <button onClick={() => setActiveTab('swarm')} className={`px-8 py-3 rounded-xl text-xs font-black uppercase transition-all ${activeTab === 'swarm' ? 'bg-purple-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>Swarm Fleet</button>
+            <div className="flex bg-slate-900 p-1.5 rounded-2xl border border-slate-800 w-fit">
+                <button onClick={() => setActiveTab('cloud')} className={`px-8 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'cloud' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500'}`}>Cloud Swarm</button>
+                <button onClick={() => setActiveTab('local')} className={`px-8 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'local' ? 'bg-purple-600 text-white shadow-lg' : 'text-slate-500'}`}>Local Workers</button>
+                <button onClick={() => setActiveTab('economics')} className={`px-8 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'economics' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-500'}`}>Finanças</button>
             </div>
 
-            {activeTab === 'economics' ? (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in slide-in-from-left-4">
-                    <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-[40px] p-10 space-y-8 shadow-2xl">
-                        <h3 className="text-xl font-black text-white uppercase tracking-tighter">Gerenciamento de Custos de Cloud</h3>
-                        <div className="space-y-4">
-                            {settings.activeModels.map(model => (
-                                <div key={model.id} className="p-6 bg-slate-950 rounded-3xl border border-slate-800 grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
-                                    <div>
-                                        <p className="font-bold text-white">{model.name}</p>
-                                        <p className="text-[9px] text-slate-500 uppercase font-black">{model.modelName}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <label className="text-[9px] font-black text-slate-600 uppercase">Input / 1M</label>
-                                        <div className="flex items-center gap-2 bg-slate-900 px-3 py-2 rounded-xl border border-slate-800">
-                                            <span className="text-slate-500 font-bold">$</span>
-                                            <input type="number" step="0.01" value={model.inputCostPer1M} onChange={e => updateCost(model.id, 'inputCostPer1M', parseFloat(e.target.value))} className="bg-transparent text-white font-bold text-xs outline-none w-full" />
-                                        </div>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <label className="text-[9px] font-black text-slate-600 uppercase">Output / 1M</label>
-                                        <div className="flex items-center gap-2 bg-slate-900 px-3 py-2 rounded-xl border border-slate-800">
-                                            <span className="text-slate-500 font-bold">$</span>
-                                            <input type="number" step="0.01" value={model.outputCostPer1M} onChange={e => updateCost(model.id, 'outputCostPer1M', parseFloat(e.target.value))} className="bg-transparent text-white font-bold text-xs outline-none w-full" />
-                                        </div>
-                                    </div>
+            {activeTab === 'cloud' ? (
+                <div className="space-y-6">
+                    {settings.activeModels.map(model => (
+                        <div key={model.id} className={`p-6 bg-slate-900 border rounded-3xl flex items-center justify-between group transition-all ${settings.primaryBrainId === model.id ? 'border-blue-500 ring-1 ring-blue-500/20' : 'border-slate-800'}`}>
+                            <div className="flex items-center gap-6">
+                                <div className={`p-4 rounded-2xl ${settings.primaryBrainId === model.id ? 'bg-blue-600 text-white' : 'bg-slate-800 text-blue-500'}`}>
+                                    <Icons.Brain />
                                 </div>
-                            ))}
+                                <div>
+                                    <p className="font-bold text-white text-lg">{model.name}</p>
+                                    <p className="text-[10px] text-slate-500 uppercase font-black">{model.modelName} {settings.primaryBrainId === model.id ? '• CÉREBRO ATIVO' : ''}</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                {settings.primaryBrainId !== model.id && (
+                                    <button onClick={() => handleSetPrimaryBrain(model.id)} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-[10px] font-black text-white uppercase transition-all">Definir como Cérebro</button>
+                                )}
+                                <button onClick={() => setSettings({...settings, activeModels: settings.activeModels.filter(m => m.id !== model.id)})} className="opacity-0 group-hover:opacity-100 p-2 text-slate-600 hover:text-red-500 transition-all"><Icons.Trash /></button>
+                            </div>
                         </div>
-                    </div>
-                    <div className="bg-slate-900 border border-slate-800 rounded-[40px] p-8 h-fit space-y-6">
-                        <h3 className="text-xs font-black text-blue-500 uppercase tracking-widest">Relatório de ROI</h3>
-                        <div className="p-6 bg-blue-600/5 rounded-3xl border border-blue-500/10 text-center">
-                            <p className="text-[10px] text-slate-400 font-medium leading-relaxed">Com base nos custos definidos, o Jabuti otimiza o uso de tokens para que cada vídeo produzido custe menos de $0.50 em processamento cloud.</p>
-                        </div>
-                    </div>
+                    ))}
                 </div>
-            ) : (
-                <div className="space-y-8 animate-in slide-in-from-right-4">
-                    <div className="bg-slate-900 border border-slate-800 rounded-[40px] p-10 shadow-2xl">
-                        <div className="flex flex-col md:flex-row justify-between items-center gap-6 mb-10">
-                            <div>
-                                <h3 className="text-xl font-black text-white uppercase tracking-tighter">Swarm Fleet (Modelos Locais)</h3>
-                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mt-1">Injete novos workers e monitore a VRAM</p>
+            ) : activeTab === 'local' ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {settings.localModels.map(model => (
+                        <div key={model.id} className={`p-8 bg-slate-900 border rounded-[32px] space-y-6 transition-all ${settings.primaryBrainId === model.id ? 'border-purple-500 ring-1 ring-purple-500/20' : 'border-slate-800'}`}>
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <p className="font-bold text-white text-lg">{model.name}</p>
+                                    <p className="text-[9px] text-slate-500 uppercase font-black">{model.size} • {model.vramRequiredGb}GB VRAM</p>
+                                </div>
+                                <div className={`${settings.primaryBrainId === model.id ? 'text-purple-500' : 'text-slate-700'}`}>
+                                    <Icons.BrainCircuit />
+                                </div>
                             </div>
-                            <div className="flex gap-4 w-full md:w-auto">
-                                <input 
-                                    value={searchModel}
-                                    onChange={e => setSearchModel(e.target.value)}
-                                    placeholder="Nome do Modelo (Ex: Flux.1, Llama 3.1...)" 
-                                    className="flex-1 md:w-64 bg-slate-950 border border-slate-800 rounded-2xl px-4 py-3 text-white text-xs outline-none focus:ring-1 focus:ring-purple-500" 
-                                />
-                                <button 
-                                    onClick={handleAutoInject}
-                                    disabled={isInjecting || !searchModel}
-                                    className="px-6 py-3 bg-purple-600 hover:bg-purple-500 disabled:opacity-30 rounded-2xl font-black text-white uppercase text-[10px] tracking-widest transition-all"
-                                >
-                                    {isInjecting ? 'Buscando...' : 'Injetar & Baixar'}
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                            <div className="p-8 bg-slate-950 rounded-[32px] border border-slate-800 flex flex-col items-center justify-center text-center space-y-2">
-                                <span className="text-[9px] font-black text-slate-500 uppercase">VRAM Ativa</span>
-                                <h4 className={`text-4xl font-black italic ${vramActive > (hw?.vramTotalGb || 0) ? 'text-red-500' : 'text-purple-400'}`}>
-                                    {vramActive.toFixed(1)}GB
-                                </h4>
-                                <p className="text-[8px] text-slate-600 font-bold uppercase tracking-widest">CAPACIDADE: {hw?.vramEstimate || 'Detectando...'}</p>
-                            </div>
-
-                            {settings.localModels.map(model => (
-                                <div key={model.id} className={`p-6 bg-slate-950 rounded-[32px] border transition-all ${model.status === 'ready' ? 'border-purple-500/30' : 'border-slate-800'}`}>
-                                    <div className="flex justify-between items-start mb-4">
-                                        <div>
-                                            <p className="font-bold text-white text-sm">{model.name}</p>
-                                            <p className="text-[9px] text-slate-500 uppercase font-black">{model.size} • {model.vramRequiredGb}GB VRAM</p>
-                                        </div>
-                                        <button onClick={() => setSettings({...settings, localModels: settings.localModels.filter(m => m.id !== model.id)})} className="text-slate-700 hover:text-red-500">
-                                            <Icons.Trash />
-                                        </button>
+                            {model.status === 'downloading' ? (
+                                <div className="space-y-2">
+                                    <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                        <div className="h-full bg-purple-500" style={{ width: `${model.progress}%` }} />
                                     </div>
-                                    {model.status === 'downloading' ? (
-                                        <div className="space-y-2">
-                                            <div className="w-full h-1 bg-slate-900 rounded-full overflow-hidden">
-                                                <div className="h-full bg-purple-500" style={{ width: `${model.progress}%` }} />
-                                            </div>
-                                            <p className="text-[8px] text-purple-500 font-black text-right">{model.progress}%</p>
-                                        </div>
-                                    ) : model.status === 'ready' ? (
-                                        <div className="flex items-center gap-2 px-3 py-1 bg-purple-500/10 text-purple-500 border border-purple-500/20 rounded-lg text-[9px] font-black uppercase justify-center">
-                                            Operational
-                                        </div>
-                                    ) : (
-                                        <button onClick={() => handleModelDownload(model.id)} className="w-full py-2 bg-slate-900 hover:bg-purple-600 border border-slate-800 rounded-xl font-black text-white text-[9px] uppercase transition-all">
-                                            Deploy
-                                        </button>
+                                    <p className="text-[9px] text-purple-400 font-black uppercase">Instalando Swarm... {model.progress}%</p>
+                                </div>
+                            ) : model.status === 'ready' ? (
+                                <div className="space-y-4">
+                                    <div className="py-2 bg-purple-500/10 border border-purple-500/20 text-purple-500 text-[10px] font-black uppercase text-center rounded-xl">Operational</div>
+                                    {settings.primaryBrainId !== model.id && (
+                                        <button onClick={() => handleSetPrimaryBrain(model.id)} className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-black text-[10px] uppercase">Definir como Cérebro</button>
                                     )}
                                 </div>
-                            ))}
+                            ) : (
+                                <button onClick={() => handleModelDownload(model.id)} className="w-full py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-black text-[10px] uppercase">Baixar IA Local</button>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            ) : (
+                <div className="bg-slate-900 border border-slate-800 rounded-[40px] p-10 text-center opacity-50">
+                    <p className="font-black text-slate-500 uppercase tracking-widest">Módulo de ROI em desenvolvimento pelo Jabuti.</p>
+                </div>
+            )}
+
+            {/* MODAL MODEL FORGE */}
+            {isForgeOpen && (
+                <div className="fixed inset-0 z-[200] bg-slate-950/90 backdrop-blur-xl flex items-center justify-center p-6" onClick={() => setIsForgeOpen(false)}>
+                    <div className="bg-slate-900 border border-slate-800 rounded-[40px] w-full max-w-2xl shadow-2xl p-10 space-y-8" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-center">
+                            <h3 className="text-2xl font-black text-white uppercase tracking-tighter">Model Forge</h3>
+                            <button onClick={() => setIsForgeOpen(false)} className="text-slate-500 hover:text-white"><Icons.Trash /></button>
+                        </div>
+
+                        <div className="space-y-10">
+                            {/* CLOUD SECTION */}
+                            <div className="space-y-4">
+                                <h4 className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Novo Modelo Cloud (API)</h4>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <input value={newCloudModel.name} onChange={e => setNewCloudModel({...newCloudModel, name: e.target.value})} placeholder="Nome (Ex: Meu Gemini Pro)" className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-xs text-white outline-none" />
+                                    <input value={newCloudModel.modelName} onChange={e => setNewCloudModel({...newCloudModel, modelName: e.target.value})} placeholder="ID Modelo (ex: gemini-1.5-pro)" className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-xs text-white outline-none" />
+                                </div>
+                                <input value={newCloudModel.apiKey} onChange={e => setNewCloudModel({...newCloudModel, apiKey: e.target.value})} type="password" placeholder="Chave API (Opcional se usar Global)" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-xs text-white outline-none" />
+                                <button onClick={handleAddCloudModel} className="w-full py-3 bg-blue-600 text-white rounded-xl font-black text-[10px] uppercase">Registrar na Nuvem</button>
+                            </div>
+
+                            <div className="border-t border-slate-800" />
+
+                            {/* LOCAL SECTION */}
+                            <div className="space-y-4">
+                                <h4 className="text-[10px] font-black text-purple-500 uppercase tracking-widest">Novo Modelo Local (Ollama/PyTorch)</h4>
+                                <div className="grid grid-cols-3 gap-4">
+                                    <input value={newLocalModel.name} onChange={e => setNewLocalModel({...newLocalModel, name: e.target.value})} placeholder="Nome IA" className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-xs text-white outline-none" />
+                                    <input value={newLocalModel.size} onChange={e => setNewLocalModel({...newLocalModel, size: e.target.value})} placeholder="Peso (ex: 4.5GB)" className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-xs text-white outline-none" />
+                                    <input value={newLocalModel.vram} onChange={e => setNewLocalModel({...newLocalModel, vram: parseInt(e.target.value)})} type="number" placeholder="VRAM (GB)" className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-xs text-white outline-none" />
+                                </div>
+                                <button onClick={handleAddLocalModel} className="w-full py-3 bg-purple-600 text-white rounded-xl font-black text-[10px] uppercase">Adicionar à Fila de Download</button>
+                            </div>
                         </div>
                     </div>
                 </div>
