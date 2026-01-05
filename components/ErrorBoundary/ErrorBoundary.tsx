@@ -13,37 +13,35 @@ interface State {
 
 /**
  * ErrorBoundary component for catching errors in child components.
- * Fix: Correctly extending React.Component with proper type parameters to resolve state and props errors.
+ * Fix: Explicitly extending Component from React to resolve TypeScript issues with state, setState, and props visibility.
  */
 class ErrorBoundary extends Component<Props, State> {
-  // Use constructor for initial state
-  constructor(props: Props) {
-    super(props);
-    this.state = {
-      hasError: false,
-      error: null,
-    };
-  }
+  // Initialize state with property initializer.
+  public state: State = {
+    hasError: false,
+    error: null,
+  };
 
+  // Update state so the next render will show the fallback UI.
   public static getDerivedStateFromError(error: Error): State {
-    // Update state so the next render will show the fallback UI.
     return { hasError: true, error };
   }
 
-  public override componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // Log the error to an error reporting service.
+  // Log the error to an error reporting service.
+  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Uncaught error:", error, errorInfo);
   }
   
-  // Resets the error boundary state to allow re-rendering the application after an error.
+  // Resets the error boundary state. Arrow function ensures proper 'this' context.
   private handleReset = () => {
-    // Reset state via this.setState
+    // Fix: setState is correctly inherited from the Component base class.
     this.setState({ hasError: false, error: null });
     window.location.reload();
   }
 
-  public override render() {
-    // If an error was caught, render the custom ErrorOverlay component.
+  // Standard React render method.
+  public render() {
+    // Access state and props from current instance.
     const { hasError, error } = this.state;
     if (hasError && error) {
       return (
@@ -55,6 +53,7 @@ class ErrorBoundary extends Component<Props, State> {
     }
 
     // Otherwise, render the children components as normal.
+    // Fix: props.children is inherited from the Component base class.
     return this.props.children;
   }
 }

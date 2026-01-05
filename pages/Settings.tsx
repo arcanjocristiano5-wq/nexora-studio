@@ -1,13 +1,17 @@
 
 import React, { useState, useEffect } from 'react';
 import { Icons } from '../constants';
-import { SystemSettings, HardwareStatus, AIConfiguration } from '../types';
-import { performHardwareBenchmark } from '../services/geminiService';
+import { SystemSettings, HardwareStatus, AIConfiguration, LocalModelDeployment, AICapability } from '../types';
+import { performHardwareBenchmark, downloadLocalModel } from '../services/geminiService';
 import Jabuti from '../components/Brand/Jabuti';
+
+const INITIAL_LOCAL_MODELS: LocalModelDeployment[] = [
+  { id: 'l1', name: 'Jabuti Nano (Llama 3 8B)', size: '4.7GB', status: 'ready', progress: 100, type: 'core', capability: 'text', vramRequiredGb: 5.5 },
+];
 
 export default function Settings() {
     const [settings, setSettings] = useState<SystemSettings>(() => {
-        const saved = localStorage.getItem('nexora_system_settings');
+        const saved = localStorage.getItem('nexora_system_settings_v3');
         return saved ? JSON.parse(saved) : { 
           primaryEngine: 'cloud', 
           fallbackEnabled: true,
@@ -17,121 +21,194 @@ export default function Settings() {
           maxResolution: '4K',
           autoSchedule: true,
           activeModels: [
-            { id: '1', name: 'Jabuti Cloud Master', provider: 'cloud', modelName: 'gemini-3-pro-preview', priority: 1, isActive: true, capabilities: ['text', 'video'] },
-            { id: '2', name: 'Cérebro Local', provider: 'local', modelName: 'WebLLM-Llama3', priority: 2, isActive: true, capabilities: ['text'] },
-          ]
+            { id: '1', name: 'Jabuti Cloud Master', provider: 'cloud', modelName: 'gemini-3-pro-preview', priority: 1, isActive: true, capabilities: ['text', 'video'], inputCostPer1M: 0.50, outputCostPer1M: 1.50 },
+            { id: '2', name: 'Stable Diffusion Cloud', provider: 'cloud', modelName: 'imagen-3', priority: 2, isActive: true, capabilities: ['image'], inputCostPer1M: 1.00, outputCostPer1M: 2.50 },
+          ],
+          localModels: INITIAL_LOCAL_MODELS
         };
     });
 
     const [hw, setHw] = useState<HardwareStatus | null>(null);
-    const [newModel, setNewModel] = useState({ name: '', model: '', key: '', provider: 'cloud' as any });
+    const [isInjecting, setIsInjecting] = useState(false);
+    const [searchModel, setSearchModel] = useState('');
+    const [activeTab, setActiveTab] = useState<'economics' | 'swarm'>('economics');
 
     useEffect(() => {
-        localStorage.setItem('nexora_system_settings', JSON.stringify(settings));
+        localStorage.setItem('nexora_system_settings_v3', JSON.stringify(settings));
         performHardwareBenchmark().then(setHw);
     }, [settings]);
 
-    const addModel = () => {
-        if (!newModel.name || !newModel.model) return;
-        const config: AIConfiguration = {
-            id: crypto.randomUUID(),
-            name: newModel.name,
-            provider: newModel.provider,
-            modelName: newModel.model,
-            apiKey: newModel.key,
-            priority: settings.activeModels.length + 1,
-            isActive: false,
-            capabilities: ['text']
-        };
-        setSettings({...settings, activeModels: [...settings.activeModels, config]});
-        setNewModel({ name: '', model: '', key: '', provider: 'cloud' });
+    const handleModelDownload = async (modelId: string) => {
+        setSettings(prev => ({
+            ...prev,
+            localModels: prev.localModels.map(m => m.id === modelId ? { ...m, status: 'downloading', progress: 0 } : m)
+        }));
+        await downloadLocalModel(modelId, (p) => {
+            setSettings(prev => ({
+                ...prev,
+                localModels: prev.localModels.map(m => m.id === modelId ? { ...m, progress: p } : m)
+            }));
+        });
+        setSettings(prev => ({
+            ...prev,
+            localModels: prev.localModels.map(m => m.id === modelId ? { ...m, status: 'ready', progress: 100 } : m)
+        }));
     };
+
+    const handleAutoInject = () => {
+        if (!searchModel) return;
+        setIsInjecting(true);
+        
+        // Simulação do Jabuti buscando nos repositórios (HuggingFace/Github)
+        setTimeout(() => {
+            const newModel: LocalModelDeployment = {
+                id: crypto.randomUUID(),
+                name: searchModel,
+                size: `${(Math.random() * 10 + 1).toFixed(1)}GB`,
+                status: 'not_installed',
+                progress: 0,
+                type: 'specialized',
+                capability: 'text',
+                vramRequiredGb: Math.floor(Math.random() * 8) + 2
+            };
+            setSettings(prev => ({...prev, localModels: [...prev.localModels, newModel]}));
+            setIsInjecting(false);
+            setSearchModel('');
+            handleModelDownload(newModel.id);
+        }, 1500);
+    };
+
+    const updateCost = (id: string, field: 'inputCostPer1M' | 'outputCostPer1M', val: number) => {
+        setSettings(prev => ({
+            ...prev,
+            activeModels: prev.activeModels.map(m => m.id === id ? { ...m, [field]: val } : m)
+        }));
+    };
+
+    const vramActive = settings.localModels
+        .filter(m => m.status === 'ready')
+        .reduce((acc, curr) => acc + curr.vramRequiredGb, 0);
 
     return (
         <div className="space-y-10 pb-20 animate-in fade-in duration-700">
             <div className="flex justify-between items-end">
                 <div>
-                    <h2 className="text-4xl font-black text-white uppercase tracking-tighter">Cockpit de IA</h2>
-                    <p className="text-slate-400 font-medium">Gerencie seu enxame de inteligências e as funções de voz do Jabuti.</p>
+                    <h2 className="text-4xl font-black text-white uppercase tracking-tighter">Command Cockpit</h2>
+                    <p className="text-slate-400 font-medium">Controle financeiro e expansão neural do Jabuti.</p>
                 </div>
                 <div className="w-16 h-16">
-                    <Jabuti state="idle" />
+                    <Jabuti state={isInjecting ? 'thinking' : 'idle'} subState={isInjecting ? 'web-search' : undefined} />
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* VOZ E ACIONAMENTO */}
-                <div className="bg-slate-900 border border-slate-800 rounded-[40px] p-8 space-y-8">
-                    <h3 className="text-xs font-black text-blue-500 uppercase tracking-widest">Controle de Voz</h3>
-                    <div className="space-y-6">
-                        <div className="p-6 bg-slate-950 rounded-3xl border border-slate-800 space-y-4">
-                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">Palavra-Chave (Wake Word)</label>
-                            <input value={settings.wakeWord} onChange={e => setSettings({...settings, wakeWord: e.target.value})} className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-white font-bold outline-none focus:ring-1 focus:ring-blue-500" />
-                            <p className="text-[9px] text-slate-600 uppercase font-black">Chame "{settings.wakeWord}" para ativar o assistente.</p>
-                        </div>
-                        <div className="flex items-center justify-between px-2">
-                            <span className="text-xs font-bold text-slate-400">Escuta Ativa (Microfone)</span>
-                            <button onClick={() => setSettings({...settings, voiceActivation: !settings.voiceActivation})} className={`w-12 h-6 rounded-full relative transition-all ${settings.voiceActivation ? 'bg-blue-600' : 'bg-slate-800'}`}>
-                                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${settings.voiceActivation ? 'left-7' : 'left-1'}`} />
-                            </button>
-                        </div>
-                        <div className="flex items-center justify-between px-2">
-                            <span className="text-xs font-bold text-slate-400">Resposta Vocal (Falar)</span>
-                            <button onClick={() => setSettings({...settings, voiceOutput: !settings.voiceOutput})} className={`w-12 h-6 rounded-full relative transition-all ${settings.voiceOutput ? 'bg-emerald-600' : 'bg-slate-800'}`}>
-                                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${settings.voiceOutput ? 'left-7' : 'left-1'}`} />
-                            </button>
-                        </div>
-                    </div>
-                </div>
+            <div className="flex bg-slate-900 p-1 rounded-2xl border border-slate-800 w-fit">
+                <button onClick={() => setActiveTab('economics')} className={`px-8 py-3 rounded-xl text-xs font-black uppercase transition-all ${activeTab === 'economics' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>Token Economics</button>
+                <button onClick={() => setActiveTab('swarm')} className={`px-8 py-3 rounded-xl text-xs font-black uppercase transition-all ${activeTab === 'swarm' ? 'bg-purple-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>Swarm Fleet</button>
+            </div>
 
-                {/* ADICIONAR NOVA IA */}
-                <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-[40px] p-10 space-y-8">
-                    <h3 className="text-xl font-black text-white uppercase tracking-tighter">Adicionar IA ao Enxame</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Nome Amigável</label>
-                            <input value={newModel.name} onChange={e => setNewModel({...newModel, name: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-5 py-3 text-white outline-none focus:ring-1 focus:ring-blue-500" placeholder="Ex: Cérebro Local" />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">ID do Modelo</label>
-                            <input value={newModel.model} onChange={e => setNewModel({...newModel, model: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-5 py-3 text-white outline-none focus:ring-1 focus:ring-blue-500" placeholder="Ex: gemini-3-pro-preview" />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">API Key (Opcional se Local)</label>
-                            <input type="password" value={newModel.key} onChange={e => setNewModel({...newModel, key: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-5 py-3 text-white outline-none focus:ring-1 focus:ring-blue-500" placeholder="Sua chave secreta..." />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Tipo de Provedor</label>
-                            <select value={newModel.provider} onChange={e => setNewModel({...newModel, provider: e.target.value as any})} className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-5 py-3 text-white outline-none">
-                                <option value="cloud">Nuvem (Gemini/OpenAI)</option>
-                                <option value="local">Local (WebGPU/window.ai)</option>
-                                <option value="custom_api">API Customizada</option>
-                            </select>
-                        </div>
-                    </div>
-                    <button onClick={addModel} className="w-full py-4 bg-blue-600 hover:bg-blue-500 rounded-2xl font-black text-white uppercase text-xs tracking-widest shadow-xl transition-all">
-                        Integrar ao Cérebro do Jabuti
-                    </button>
-                </div>
-
-                {/* LISTA DE MODELOS ATIVOS */}
-                <div className="lg:col-span-3 space-y-6">
-                    <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest px-4">Enxame Ativo</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {settings.activeModels.map(m => (
-                            <div key={m.id} className={`p-6 bg-slate-900 border rounded-3xl flex justify-between items-center transition-all ${m.isActive ? 'border-blue-500 bg-blue-500/5' : 'border-slate-800 opacity-60'}`}>
-                                <div>
-                                    <p className="font-bold text-white">{m.name}</p>
-                                    <p className="text-[9px] text-slate-500 uppercase font-black">{m.provider} • {m.modelName}</p>
+            {activeTab === 'economics' ? (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in slide-in-from-left-4">
+                    <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-[40px] p-10 space-y-8 shadow-2xl">
+                        <h3 className="text-xl font-black text-white uppercase tracking-tighter">Gerenciamento de Custos de Cloud</h3>
+                        <div className="space-y-4">
+                            {settings.activeModels.map(model => (
+                                <div key={model.id} className="p-6 bg-slate-950 rounded-3xl border border-slate-800 grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+                                    <div>
+                                        <p className="font-bold text-white">{model.name}</p>
+                                        <p className="text-[9px] text-slate-500 uppercase font-black">{model.modelName}</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[9px] font-black text-slate-600 uppercase">Input / 1M</label>
+                                        <div className="flex items-center gap-2 bg-slate-900 px-3 py-2 rounded-xl border border-slate-800">
+                                            <span className="text-slate-500 font-bold">$</span>
+                                            <input type="number" step="0.01" value={model.inputCostPer1M} onChange={e => updateCost(model.id, 'inputCostPer1M', parseFloat(e.target.value))} className="bg-transparent text-white font-bold text-xs outline-none w-full" />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[9px] font-black text-slate-600 uppercase">Output / 1M</label>
+                                        <div className="flex items-center gap-2 bg-slate-900 px-3 py-2 rounded-xl border border-slate-800">
+                                            <span className="text-slate-500 font-bold">$</span>
+                                            <input type="number" step="0.01" value={model.outputCostPer1M} onChange={e => updateCost(model.id, 'outputCostPer1M', parseFloat(e.target.value))} className="bg-transparent text-white font-bold text-xs outline-none w-full" />
+                                        </div>
+                                    </div>
                                 </div>
-                                <button onClick={() => setSettings({...settings, activeModels: settings.activeModels.map(am => am.id === m.id ? {...am, isActive: !am.isActive} : am)})} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${m.isActive ? 'bg-blue-600 text-white shadow-lg' : 'bg-slate-800 text-slate-600'}`}>
-                                    <Icons.Sparkles />
+                            ))}
+                        </div>
+                    </div>
+                    <div className="bg-slate-900 border border-slate-800 rounded-[40px] p-8 h-fit space-y-6">
+                        <h3 className="text-xs font-black text-blue-500 uppercase tracking-widest">Relatório de ROI</h3>
+                        <div className="p-6 bg-blue-600/5 rounded-3xl border border-blue-500/10 text-center">
+                            <p className="text-[10px] text-slate-400 font-medium leading-relaxed">Com base nos custos definidos, o Jabuti otimiza o uso de tokens para que cada vídeo produzido custe menos de $0.50 em processamento cloud.</p>
+                        </div>
+                    </div>
+                </div>
+            ) : (
+                <div className="space-y-8 animate-in slide-in-from-right-4">
+                    <div className="bg-slate-900 border border-slate-800 rounded-[40px] p-10 shadow-2xl">
+                        <div className="flex flex-col md:flex-row justify-between items-center gap-6 mb-10">
+                            <div>
+                                <h3 className="text-xl font-black text-white uppercase tracking-tighter">Swarm Fleet (Modelos Locais)</h3>
+                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mt-1">Injete novos workers e monitore a VRAM</p>
+                            </div>
+                            <div className="flex gap-4 w-full md:w-auto">
+                                <input 
+                                    value={searchModel}
+                                    onChange={e => setSearchModel(e.target.value)}
+                                    placeholder="Nome do Modelo (Ex: Flux.1, Llama 3.1...)" 
+                                    className="flex-1 md:w-64 bg-slate-950 border border-slate-800 rounded-2xl px-4 py-3 text-white text-xs outline-none focus:ring-1 focus:ring-purple-500" 
+                                />
+                                <button 
+                                    onClick={handleAutoInject}
+                                    disabled={isInjecting || !searchModel}
+                                    className="px-6 py-3 bg-purple-600 hover:bg-purple-500 disabled:opacity-30 rounded-2xl font-black text-white uppercase text-[10px] tracking-widest transition-all"
+                                >
+                                    {isInjecting ? 'Buscando...' : 'Injetar & Baixar'}
                                 </button>
                             </div>
-                        ))}
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                            <div className="p-8 bg-slate-950 rounded-[32px] border border-slate-800 flex flex-col items-center justify-center text-center space-y-2">
+                                <span className="text-[9px] font-black text-slate-500 uppercase">VRAM Ativa</span>
+                                <h4 className={`text-4xl font-black italic ${vramActive > (hw?.vramTotalGb || 0) ? 'text-red-500' : 'text-purple-400'}`}>
+                                    {vramActive.toFixed(1)}GB
+                                </h4>
+                                <p className="text-[8px] text-slate-600 font-bold uppercase tracking-widest">CAPACIDADE: {hw?.vramEstimate || 'Detectando...'}</p>
+                            </div>
+
+                            {settings.localModels.map(model => (
+                                <div key={model.id} className={`p-6 bg-slate-950 rounded-[32px] border transition-all ${model.status === 'ready' ? 'border-purple-500/30' : 'border-slate-800'}`}>
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div>
+                                            <p className="font-bold text-white text-sm">{model.name}</p>
+                                            <p className="text-[9px] text-slate-500 uppercase font-black">{model.size} • {model.vramRequiredGb}GB VRAM</p>
+                                        </div>
+                                        <button onClick={() => setSettings({...settings, localModels: settings.localModels.filter(m => m.id !== model.id)})} className="text-slate-700 hover:text-red-500">
+                                            <Icons.Trash />
+                                        </button>
+                                    </div>
+                                    {model.status === 'downloading' ? (
+                                        <div className="space-y-2">
+                                            <div className="w-full h-1 bg-slate-900 rounded-full overflow-hidden">
+                                                <div className="h-full bg-purple-500" style={{ width: `${model.progress}%` }} />
+                                            </div>
+                                            <p className="text-[8px] text-purple-500 font-black text-right">{model.progress}%</p>
+                                        </div>
+                                    ) : model.status === 'ready' ? (
+                                        <div className="flex items-center gap-2 px-3 py-1 bg-purple-500/10 text-purple-500 border border-purple-500/20 rounded-lg text-[9px] font-black uppercase justify-center">
+                                            Operational
+                                        </div>
+                                    ) : (
+                                        <button onClick={() => handleModelDownload(model.id)} className="w-full py-2 bg-slate-900 hover:bg-purple-600 border border-slate-800 rounded-xl font-black text-white text-[9px] uppercase transition-all">
+                                            Deploy
+                                        </button>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
-            </div>
+            )}
         </div>
     );
 }

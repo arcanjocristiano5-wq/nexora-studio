@@ -49,12 +49,12 @@ export default function Visuais() {
         ? `${prompt}. 8k, uhd, highly detailed, photorealistic.` 
         : prompt;
       
+      // Fixed: Removed 5th argument 'selectedStyleId' to match generateConceptArt signature
       const url = await generateConceptArt(
         finalPrompt, 
         selectedStyle.name, 
         referenceImage || undefined, 
-        aspectRatio, 
-        selectedStyleId
+        aspectRatio
       );
 
       if (url) {

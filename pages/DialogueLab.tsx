@@ -48,12 +48,10 @@ export default function DialogueLab() {
           return;
       }
 
-      // FIX: Changed 4th argument from 'cloud' to false to satisfy boolean parameter requirement
+      // Fixed: Removed extra arguments to match generateDialogue signature
       const base64Audio = await generateDialogue(
           script, 
-          characters, 
-          selectedEmotion === 'Padrão' ? undefined : selectedEmotion.toLowerCase(),
-          false
+          characters
       );
 
       if (base64Audio) {
