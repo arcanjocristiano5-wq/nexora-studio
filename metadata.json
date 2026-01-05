@@ -1,0 +1,9 @@
+{
+  "name": "NEXORA",
+  "description": "Uma plataforma avançada de storyboard e design narrativo baseada em IA para escritores e diretores criativos. Crie séries, orquestre histórias e visualize cenas com o Gemini.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}
