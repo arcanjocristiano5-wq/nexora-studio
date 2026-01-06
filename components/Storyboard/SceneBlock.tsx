@@ -1,7 +1,8 @@
 
 import React, { useState, memo } from 'react';
 import { Scene } from '../../types';
-import { generateConceptArt, generateScript, generateDialogue } from '../../services/geminiService';
+// FIX: Removed 'generateScript' which is not exported from geminiService.
+import { generateConceptArt, generateDialogue } from '../../services/geminiService';
 import { Icons, VISUAL_STYLES } from '../../constants';
 
 interface SceneBlockProps {

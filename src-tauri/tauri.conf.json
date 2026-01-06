@@ -1,3 +1,4 @@
+
 {
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -12,37 +13,24 @@
   },
   "tauri": {
     "allowlist": {
-      "all": false,
+      "all": true,
       "window": {
-        "all": false,
-        "close": true,
-        "hide": true,
-        "maximize": true,
-        "minimize": true,
-        "resizable": true,
-        "show": true,
+        "all": true,
         "startDragging": true
       },
       "shell": {
-        "all": false,
+        "all": true,
         "open": true
-      },
-      "dialog": {
-        "all": true
       },
       "fs": {
         "all": true,
         "scope": ["$APP/*"]
-      },
-      "http": {
-        "all": true,
-        "scope": ["https://*.google.com/*", "https://*.googleapis.com/*"]
       }
     },
     "bundle": {
       "active": true,
       "targets": "all",
-      "identifier": "com.storyflow.production",
+      "identifier": "com.nexora.ai",
       "icon": [
         "icons/32x32.png",
         "icons/128x128.png",
@@ -57,12 +45,13 @@
     "window": [
       {
         "fullscreen": false,
-        "height": 800,
+        "height": 900,
         "resizable": true,
-        "title": "NEXORA",
-        "width": 1200,
+        "title": "NEXORA AI - HYBRID PRODUCTION",
+        "width": 1400,
         "decorations": false,
-        "center": true
+        "center": true,
+        "transparent": true
       }
     ]
   }
