@@ -7,13 +7,13 @@ import { Icons } from '../../constants';
 interface StoryboardProps {
   scenes: Scene[];
   characters: Character[];
+  visualStyleId?: string;
   onScenesChange: (scenes: Scene[]) => void;
   onAnimateScene: (scene: Scene) => void;
 }
 
-const Storyboard: React.FC<StoryboardProps> = ({ scenes, characters, onScenesChange, onAnimateScene }) => {
+const Storyboard: React.FC<StoryboardProps> = ({ scenes, characters, visualStyleId, onScenesChange, onAnimateScene }) => {
   const addScene = () => {
-    // FIX: Added required scriptLines property to new scene creation
     const newScene: Scene = {
       id: crypto.randomUUID(),
       title: 'Nova Cena',
@@ -64,6 +64,7 @@ const Storyboard: React.FC<StoryboardProps> = ({ scenes, characters, onScenesCha
           key={scene.id}
           scene={scene}
           characters={characters}
+          visualStyleId={visualStyleId}
           onDelete={deleteScene}
           onUpdate={updateScene}
           onAnimate={onAnimateScene}
@@ -75,7 +76,7 @@ const Storyboard: React.FC<StoryboardProps> = ({ scenes, characters, onScenesCha
       ))}
       <button
         onClick={addScene}
-        className="border-2 border-dashed border-slate-700 hover:border-blue-500 rounded-xl aspect-video flex flex-col items-center justify-center gap-3 text-slate-500 hover:text-blue-400 transition-all bg-slate-800/20"
+        className="border-2 border-dashed border-slate-700 hover:border-blue-500 rounded-2xl aspect-video flex flex-col items-center justify-center gap-3 text-slate-500 hover:text-blue-400 transition-all bg-slate-800/20 min-h-[300px]"
       >
         <Icons.Plus />
         <span className="font-medium">Adicionar Nova Cena</span>

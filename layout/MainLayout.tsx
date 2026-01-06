@@ -1,8 +1,13 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import JabutiAssistant from '../components/Assistant/JabutiAssistant';
+import FloatingJabuti from '../components/Assistant/FloatingJabuti';
+import DirectorOverlay from '../components/LiveDirector/DirectorOverlay';
 import './sidebar.css';
+import { useWakeWord } from '../hooks/useWakeWord';
+import { getUserPreference } from '../services/geminiService';
+import { SystemSettings } from '../types';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -10,10 +15,33 @@ interface MainLayoutProps {
 
 const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
+  const [isDirectorActive, setIsDirectorActive] = useState(false);
+  const [settings, setSettings] = useState<SystemSettings>(getUserPreference());
+
+  useEffect(() => {
+    const handleSettings = () => setSettings(getUserPreference());
+    window.addEventListener('storage', handleSettings);
+    return () => window.removeEventListener('storage', handleSettings);
+  }, []);
+  
+  const handleToggleAssistant = () => setIsAssistantOpen(prev => !prev);
+  
+  const handleActivateDirector = () => {
+    if (isDirectorActive) return;
+    setIsDirectorActive(true);
+  };
+
+  const handleCloseDirector = () => setIsDirectorActive(false);
+
+  const { isListening: isListeningForWakeWord } = useWakeWord({
+    wakeWord: 'jabuti',
+    onWakeWord: handleActivateDirector,
+    enabled: settings.voiceActivation,
+  });
 
   return (
     <div className="layout overflow-hidden">
-      <Sidebar onToggleAssistant={() => setIsAssistantOpen(!isAssistantOpen)} />
+      <Sidebar />
       
       <main className="content relative flex">
         <div className={`flex-1 transition-all duration-500 ${isAssistantOpen ? 'mr-[400px]' : 'mr-0'}`}>
@@ -27,6 +55,14 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
            <JabutiAssistant onClose={() => setIsAssistantOpen(false)} />
         </div>
       </main>
+
+      <FloatingJabuti 
+        onToggleChat={handleToggleAssistant} 
+        onActivateDirector={handleActivateDirector}
+        isListeningForWakeWord={isListeningForWakeWord}
+      />
+      
+      {isDirectorActive && <DirectorOverlay onClose={handleCloseDirector} />}
     </div>
   );
 };

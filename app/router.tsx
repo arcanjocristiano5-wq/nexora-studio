@@ -19,6 +19,8 @@ const ProjetosPage = lazy(() => import("../pages/Projetos"));
 const BillingPage = lazy(() => import("../pages/Billing"));
 const GrowthPage = lazy(() => import("../pages/Growth"));
 const MarketingStudioPage = lazy(() => import("../pages/MarketingStudio"));
+const ProductionMonitorPage = lazy(() => import("../pages/ProductionMonitor"));
+const SchedulePage = lazy(() => import("../pages/Schedule"));
 
 const SuspenseLayout = () => (
   <Suspense fallback={<div className="w-full h-full flex items-center justify-center"><LoadingSpinner /></div>}>
@@ -41,6 +43,7 @@ export const router = createHashRouter([
       { path: "canais", element: <CanaisPage /> },
       { path: "projetos", element: <ProjetosPage /> },
       { path: "roteiro/:storyId", element: <RoteirosPage /> },
+      { path: "cronograma", element: <SchedulePage /> },
       { path: "personagens", element: <CastingPage /> },
       { path: "visuais", element: <VisuaisPage /> },
       { path: "dialogos", element: <DialogueLab /> },
@@ -52,6 +55,7 @@ export const router = createHashRouter([
       { path: "assistente", element: <MensagensPage /> }, 
       { path: "faturamento", element: <BillingPage /> },
       { path: "configuracoes", element: <SettingsPage /> },
+      { path: "producao-automatica/:storyId", element: <ProductionMonitorPage /> },
     ],
   },
 ]);

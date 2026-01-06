@@ -1,29 +1,39 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GoogleGenAI, Modality, LiveServerMessage, Type, FunctionDeclaration } from '@google/genai';
 import { decodeAudio, decodeAudioData, createPcmBlob } from '../../services/audioUtils';
-import { talkToJabuti } from '../../services/geminiService';
+import { talkToJabuti, createProjectWithAI, generateDialogue } from '../../services/geminiService';
 import { Icons } from '../../constants';
 import Jabuti from '../Brand/Jabuti';
-import { SystemSettings, AIConfiguration } from '../../types';
+import { SystemSettings, AIConfiguration, LocalModelDeployment, Story } from '../../types';
+
+// FIX: Add global declaration for SpeechRecognition to fix TypeScript errors in browsers.
+declare global {
+  interface Window {
+    SpeechRecognition: any;
+    webkitSpeechRecognition: any;
+  }
+}
 
 export default function JabutiAssistant({ onClose }: { onClose: () => void }) {
   const [messages, setMessages] = useState<any[]>([]);
   const [isTyping, setIsTyping] = useState(false);
-  const [isLive, setIsLive] = useState(false);
-  const [isConnecting, setIsConnecting] = useState(false);
+  const [isListening, setIsListening] = useState(false);
   const [input, setInput] = useState('');
+  const [confirmation, setConfirmation] = useState<{ prompt: string } | null>(null);
+  const navigate = useNavigate();
   
   const [settings, setSettings] = useState<SystemSettings | null>(() => {
     const saved = localStorage.getItem('nexora_system_settings_v4');
     return saved ? JSON.parse(saved) : null;
   });
+  
+  // FIX: Use 'any' for simplicity as SpeechRecognition might not be in default TS types.
+  const recognitionRef = useRef<any | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const currentSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
-  const sessionRef = useRef<any>(null);
-  const audioContextsRef = useRef<{ input: AudioContext; output: AudioContext } | null>(null);
 
-  // Escuta atualizações de cérebro master
   useEffect(() => {
     const handleStorage = () => {
         const saved = localStorage.getItem('nexora_system_settings_v4');
@@ -33,82 +43,145 @@ export default function JabutiAssistant({ onClose }: { onClose: () => void }) {
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
-  const currentBrain = settings?.activeModels.find(m => m.id === settings.primaryBrainId) || 
-                     settings?.activeModels[0];
+  const allModels: (AIConfiguration | LocalModelDeployment)[] = [...(settings?.activeModels || []), ...(settings?.localModels || [])];
+  const currentBrain = allModels.find(m => m.id === settings?.primaryBrainId) || settings?.activeModels[0];
+  
+  const speak = async (text: string) => {
+    if (currentSourceRef.current) currentSourceRef.current.stop();
+    
+    const base64Audio = await generateDialogue(text);
+    if (base64Audio) {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+      }
+      const audioBuffer = await decodeAudioData(decodeAudio(base64Audio), audioContextRef.current, 24000, 1);
+      const source = audioContextRef.current.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(audioContextRef.current.destination);
+      source.start(0);
+      currentSourceRef.current = source;
+    }
+  };
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isTyping) return;
+    if (!input.trim() || isTyping || confirmation) return;
 
+    const lowerInput = input.toLowerCase();
     const userMsg = { role: 'user', content: input };
     setMessages(prev => [...prev, userMsg]);
     setInput('');
-    setIsTyping(true);
+    if (isListening) toggleListen();
 
+    const allCreationTriggers = [
+        "faça todo o processo", "produção automática", "crie o filme completo", "faça o filme",
+        "crie a história", "crie uma história", "crie um projeto", "crie uma série", "nova história sobre", "novo projeto sobre"
+    ];
+    const creationTrigger = allCreationTriggers.find(p => lowerInput.includes(p));
+
+    if (creationTrigger) {
+      const idea = input.substring(lowerInput.indexOf(creationTrigger) + creationTrigger.length).replace(/^de\s/i, '').replace(/^sobre\s/i, '').trim();
+      setConfirmation({ prompt: idea || 'uma história de ficção científica' });
+      const confirmationText = `Confirmação necessária. Iniciar produção automática completa para "${idea}"? Este processo é intensivo.`;
+      speak(confirmationText);
+      return;
+    }
+    
+    setIsTyping(true);
     try {
         const result = await talkToJabuti(input);
-        setMessages(prev => [...prev, { 
+        const assistantMsg = { 
             role: 'assistant', 
             content: result.text, 
             engine: result.engine,
             sources: result.sources 
-        }]);
+        };
+        setMessages(prev => [...prev, assistantMsg]);
+        speak(result.text);
     } catch (err) {
-        setMessages(prev => [...prev, { role: 'assistant', content: "Houve uma interferência na minha rede de pesquisa. Tente novamente, Diretor.", engine: "System Error" }]);
+        const errorMsg = "Houve uma interferência na minha rede de pesquisa. Tente novamente, Diretor.";
+        setMessages(prev => [...prev, { role: 'assistant', content: errorMsg, engine: "System Error" }]);
+        speak(errorMsg);
     } finally {
         setIsTyping(false);
     }
   };
 
-  const connectLive = async () => {
-    if (isLive || isConnecting) return;
-    setIsConnecting(true);
+  const handleConfirmProduction = async () => {
+    if (!confirmation) return;
+    setIsTyping(true);
+    setConfirmation(null);
+    speak(`Entendido, Diretor. Iniciando produção para "${confirmation.prompt}".`);
     
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const inputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
-      const outputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-      audioContextsRef.current = { input: inputCtx, output: outputCtx };
+      const isSeries = confirmation.prompt.toLowerCase().includes('série');
+      const { title, description } = await createProjectWithAI(confirmation.prompt, isSeries ? 'series' : 'story');
 
-      // Sempre usa a chave do cérebro primário se existir
-      const ai = new GoogleGenAI({ apiKey: currentBrain?.apiKey || process.env.API_KEY });
-      const sessionPromise = ai.live.connect({
-        model: 'gemini-2.5-flash-native-audio-preview-09-2025',
-        config: {
-          responseModalities: [Modality.AUDIO],
-          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } } },
-          systemInstruction: `Você é o Jabuti, Diretor Criativo da NEXORA. Use o cérebro: ${currentBrain?.name}.`,
-        },
-        callbacks: {
-          onopen: () => {
-            setIsLive(true);
-            setIsConnecting(false);
-            const source = inputCtx.createMediaStreamSource(stream);
-            const scriptProcessor = inputCtx.createScriptProcessor(4096, 1, 1);
-            scriptProcessor.onaudioprocess = (e) => {
-                const inputData = e.inputBuffer.getChannelData(0);
-                sessionPromise.then(session => session.sendRealtimeInput({ media: createPcmBlob(inputData) }));
-            };
-            source.connect(scriptProcessor);
-            scriptProcessor.connect(inputCtx.destination);
-          },
-          onmessage: async (message: LiveServerMessage) => {
-            const base64Audio = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
-            if (base64Audio && audioContextsRef.current) {
-                const { output } = audioContextsRef.current;
-                const audioBuffer = await decodeAudioData(decodeAudio(base64Audio), output, 24000, 1);
-                const source = output.createBufferSource();
-                source.buffer = audioBuffer;
-                source.connect(output.destination);
-                source.start();
-            }
-          },
-          onerror: () => { setIsLive(false); setIsConnecting(false); },
-          onclose: () => { setIsLive(false); }
+      const newProject: Story = {
+        id: `proj-${crypto.randomUUID()}`,
+        title,
+        description,
+        status: 'draft',
+        scenes: [],
+        characters: [],
+        subtitleStyleId: 'cinematic',
+        visualStyleId: 'realistic-2.0',
+        isMiniSeries: isSeries
+      };
+      
+      const currentProjects: Story[] = JSON.parse(localStorage.getItem('nexora_custom_projects_v1') || '[]');
+      localStorage.setItem('nexora_custom_projects_v1', JSON.stringify([newProject, ...currentProjects]));
+      window.dispatchEvent(new Event('nexora_projects_updated'));
+
+      navigate(`/producao-automatica/${newProject.id}`);
+      onClose();
+
+    } catch(e) {
+      const errorMsg = "O Jabuti não conseguiu iniciar a produção. Verifique sua conexão e tente novamente.";
+      alert(errorMsg);
+      speak(errorMsg);
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
+  const toggleListen = () => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+    } else {
+      // FIX: window.SpeechRecognition is now available due to global declaration.
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        alert("Seu navegador não suporta reconhecimento de voz.");
+        return;
+      }
+      
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'pt-BR';
+      recognition.interimResults = true;
+      recognition.continuous = true;
+
+      recognition.onresult = (event: any) => {
+        let final_transcript = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            final_transcript += event.results[i][0].transcript;
+          }
         }
-      });
-      sessionRef.current = await sessionPromise;
-    } catch (err) { setIsConnecting(false); }
+        if (final_transcript) {
+          setInput(prev => prev + final_transcript);
+        }
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+      
+      recognition.start();
+      recognitionRef.current = recognition;
+      setIsListening(true);
+    }
   };
 
   return (
@@ -116,7 +189,7 @@ export default function JabutiAssistant({ onClose }: { onClose: () => void }) {
       <div className="p-5 border-b border-white/5 flex items-center justify-between bg-slate-900/40">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 drop-shadow-[0_0_10px_rgba(59,130,246,0.3)]">
-            <Jabuti state={isLive ? 'speaking' : isConnecting ? 'thinking' : 'idle'} />
+            <Jabuti state={isTyping ? 'thinking' : (isListening ? 'speaking' : 'idle')} />
           </div>
           <div>
             <h3 className="text-[10px] font-black text-white uppercase tracking-tighter leading-none mb-1">JABUTI CORE</h3>
@@ -126,12 +199,6 @@ export default function JabutiAssistant({ onClose }: { onClose: () => void }) {
           </div>
         </div>
         <div className="flex gap-1.5">
-            <button 
-              onClick={isLive ? () => sessionRef.current?.close() : connectLive}
-              className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${isLive ? 'bg-red-500/10 text-red-500' : 'bg-blue-600 text-white shadow-xl'}`}
-            >
-                {isConnecting ? <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /> : (isLive ? <Icons.Trash /> : <Icons.Plus />)}
-            </button>
             <button onClick={onClose} className="w-9 h-9 flex items-center justify-center hover:bg-white/5 rounded-xl transition-all text-slate-500"><Icons.Trash /></button>
         </div>
       </div>
@@ -158,19 +225,37 @@ export default function JabutiAssistant({ onClose }: { onClose: () => void }) {
         )}
       </div>
 
-      <div className="p-4 bg-slate-900/50 border-t border-white/5">
-        <form onSubmit={handleSendMessage} className="flex gap-2 bg-slate-950 p-1.5 rounded-xl border border-white/10">
-          <input 
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            placeholder={isLive ? "Escutando..." : "Orquestrar do Roteiro ao Export..."}
-            className="flex-1 bg-transparent border-none text-[11px] text-white px-3 outline-none"
-          />
-          <button type="submit" disabled={isTyping} className="w-8 h-8 flex items-center justify-center bg-blue-600 rounded-lg text-white">
-             <Icons.Plus />
-          </button>
-        </form>
-      </div>
+      {confirmation ? (
+        <div className="p-4 bg-slate-900/50 border-t border-white/5 space-y-3">
+          <p className="text-center text-[10px] font-bold text-amber-400 uppercase tracking-widest">Confirmação Necessária</p>
+          <p className="text-center text-xs text-slate-300">Iniciar produção automática completa para <strong className="text-white">"{confirmation.prompt}"</strong>? Este processo é intensivo.</p>
+          <div className="flex gap-2">
+            <button onClick={() => setConfirmation(null)} className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-bold rounded-lg">Cancelar</button>
+            <button onClick={handleConfirmProduction} className="flex-1 py-2 bg-blue-600 hover:bg-blue-500 text-xs font-bold rounded-lg">Confirmar e Iniciar</button>
+          </div>
+        </div>
+      ) : (
+        <div className="p-4 bg-slate-900/50 border-t border-white/5">
+          <form onSubmit={handleSendMessage} className="flex gap-2 bg-slate-950 p-1.5 rounded-xl border border-white/10">
+            <button 
+              type="button" 
+              onClick={toggleListen}
+              className={`w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-lg transition-all ${isListening ? 'bg-red-500/20 text-red-500 animate-pulse' : 'bg-slate-800 text-slate-400'}`}
+            >
+              <Icons.Music />
+            </button>
+            <input 
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              placeholder={isListening ? "Escutando..." : "Orquestrar do Roteiro ao Export..."}
+              className="flex-1 bg-transparent border-none text-[11px] text-white px-3 outline-none"
+            />
+            <button type="submit" disabled={isTyping || !input.trim()} className="w-8 h-8 flex items-center justify-center bg-blue-600 rounded-lg text-white disabled:opacity-50">
+               <Icons.Plus />
+            </button>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,7 +1,10 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { Icons } from '../constants';
+import { SystemSettings } from '../types';
 
 const BILLING_STORAGE_KEY = 'nexora_billing_limits_v2';
+const API_KEYS_STORAGE_KEY = 'nexora_api_keys_v1';
 
 type ProviderId = 'gemini' | 'openai';
 
@@ -28,12 +31,43 @@ export default function Billing() {
     const saved = localStorage.getItem(BILLING_STORAGE_KEY);
     return saved ? JSON.parse(saved) : { gemini: 100, openai: 100 };
   });
+
+  const [apiKeys, setApiKeys] = useState<Record<ProviderId, string>>(() => {
+    const saved = localStorage.getItem(API_KEYS_STORAGE_KEY);
+    return saved ? JSON.parse(saved) : { gemini: '', openai: '' };
+  });
+
   const [newLimitInput, setNewLimitInput] = useState<string>(limits[activeProvider].toString());
+  const [newApiKeyInput, setNewApiKeyInput] = useState<string>(apiKeys[activeProvider]);
   const [usage, setUsage] = useState(initialUsage);
 
   useEffect(() => {
     setNewLimitInput(limits[activeProvider].toString());
-  }, [activeProvider, limits]);
+    setNewApiKeyInput(apiKeys[activeProvider]);
+  }, [activeProvider, limits, apiKeys]);
+
+  const handleSaveKey = () => {
+      const newKeys = { ...apiKeys, [activeProvider]: newApiKeyInput };
+      setApiKeys(newKeys);
+      localStorage.setItem(API_KEYS_STORAGE_KEY, JSON.stringify(newKeys));
+
+      // Atualiza a chave nos modelos de nuvem
+      const settingsRaw = localStorage.getItem('nexora_system_settings_v4');
+      if(settingsRaw) {
+        const settings: SystemSettings = JSON.parse(settingsRaw);
+        const updatedModels = settings.activeModels.map(m => {
+          if (m.provider === 'cloud') { // Assumindo que todos os cloud são gemini por enquanto
+            return { ...m, apiKey: newApiKeyInput };
+          }
+          return m;
+        });
+        const updatedSettings = { ...settings, activeModels: updatedModels };
+        localStorage.setItem('nexora_system_settings_v4', JSON.stringify(updatedSettings));
+        window.dispatchEvent(new Event('storage'));
+      }
+
+      alert("Chave API salva com sucesso!");
+  };
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -164,6 +198,24 @@ export default function Billing() {
                 {usagePercentage > 85 && (
                     <p className="text-xs text-center mt-2 text-red-400 font-bold">Atenção: Você atingiu {Math.round(usagePercentage)}% do seu limite de gastos.</p>
                 )}
+            </div>
+            
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl">
+                <h3 className="font-bold text-white mb-4">Gerenciamento de Chaves API</h3>
+                <div className="space-y-3">
+                    <div className="relative">
+                        <input
+                            type="password"
+                            value={newApiKeyInput}
+                            onChange={e => setNewApiKeyInput(e.target.value)}
+                            placeholder={`Cole sua chave ${activeProviderData.name} aqui`}
+                            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm font-mono text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                    </div>
+                    <button onClick={handleSaveKey} className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 rounded-xl text-sm font-bold transition-colors">
+                        Salvar Chave
+                    </button>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

@@ -4,16 +4,18 @@ import { Icons } from '../constants';
 import { analyzeChannelPostPattern, upscaleTo8K } from '../services/geminiService';
 import Jabuti from '../components/Brand/Jabuti';
 
+type Resolution = '1080p' | '4K' | '8K';
+
 export default function Export() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [schedule, setSchedule] = useState<any>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
+  const [resolution, setResolution] = useState<Resolution>('1080p');
 
   const handleSmartSchedule = async () => {
     setIsSyncing(true);
     try {
-      // Simula leitura de um canal vinculado
       const result = await analyzeChannelPostPattern("https://youtube.com/@MistériosIA");
       setSchedule(result);
     } finally {
@@ -23,9 +25,10 @@ export default function Export() {
 
   const handleFinalExport = async () => {
     setIsExporting(true);
+    setExportProgress(0);
     await upscaleTo8K("video_url", (p) => setExportProgress(p));
     setIsExporting(false);
-    alert("Master Finalizado e Exportado com Sucesso!");
+    alert(`Master Finalizado em ${resolution} e Exportado com Sucesso!`);
   };
 
   return (
@@ -41,7 +44,6 @@ export default function Export() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* AGENDADOR INTELIGENTE */}
         <div className="bg-slate-900 border border-slate-800 rounded-[40px] p-10 space-y-8">
             <div className="flex justify-between items-center">
                 <h3 className="text-xl font-black text-white uppercase">Growth Scheduler</h3>
@@ -73,17 +75,21 @@ export default function Export() {
             )}
         </div>
 
-        {/* RENDER FINAL */}
         <div className="bg-slate-900 border border-slate-800 rounded-[40px] p-10 space-y-8">
             <h3 className="text-xl font-black text-white uppercase">Render Swarm Sinc</h3>
             <div className="space-y-4">
-                <div className="flex justify-between items-center p-6 bg-slate-950 rounded-3xl border border-slate-800">
-                    <div>
+                <div className="p-6 bg-slate-950 rounded-3xl border border-slate-800 space-y-4">
+                    <div className="flex justify-between items-center">
                         <p className="font-bold text-white">Master Local (Até 8K)</p>
                         <p className="text-[9px] text-slate-500 uppercase font-black">Usa GPU Platina + Swarm Workers</p>
                     </div>
-                    <button onClick={handleFinalExport} disabled={isExporting} className="px-8 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-black text-white uppercase text-[10px] tracking-widest shadow-lg">
-                        {isExporting ? `${exportProgress}%` : 'Iniciar Export'}
+                    <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800">
+                        {(['1080p', '4K', '8K'] as Resolution[]).map(res => (
+                           <button key={res} onClick={() => setResolution(res)} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${resolution === res ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-500'}`}>{res}</button>
+                        ))}
+                    </div>
+                    <button onClick={handleFinalExport} disabled={isExporting} className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-black text-white uppercase text-[10px] tracking-widest shadow-lg">
+                        {isExporting ? `Renderizando... ${exportProgress}%` : `Iniciar Export em ${resolution}`}
                     </button>
                 </div>
                 {isExporting && (
@@ -91,16 +97,6 @@ export default function Export() {
                         <div className="h-full bg-emerald-500 transition-all" style={{ width: `${exportProgress}%` }} />
                     </div>
                 )}
-                
-                <div className="p-6 bg-slate-950 rounded-3xl border border-slate-800 opacity-50">
-                    <div className="flex justify-between items-center">
-                        <div>
-                            <p className="font-bold text-slate-400">Cloud Render (VEO)</p>
-                            <p className="text-[9px] text-slate-600 uppercase font-black">Processamento Externo</p>
-                        </div>
-                        <span className="text-[9px] font-black text-slate-700 uppercase">Indisponível</span>
-                    </div>
-                </div>
             </div>
         </div>
       </div>

@@ -1,58 +1,85 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Story, Scene } from '../types';
+import { Story, Character, Scene, ScriptLine } from '../types';
 import { Icons, INITIAL_SERIES, INITIAL_STORIES } from '../constants';
-import { generateStructuredScript, generateScenes, ensureWorker } from '../services/geminiService';
-import SceneBlock from '../components/Storyboard/SceneBlock';
+import { continueScript, extractCharacters, generateStructuredScript } from '../services/geminiService';
+import Storyboard from '../components/Storyboard/Storyboard';
+import ScriptTimeline from '../components/Roteiro/ScriptTimeline';
 
 export default function Roteiros() {
   const navigate = useNavigate();
   const { storyId } = useParams<{ storyId: string }>();
   
   const [story, setStory] = useState<Story | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'script' | 'visual'>('script');
-  const [workerProgress, setWorkerProgress] = useState<number | null>(null);
+  const [isContinuating, setIsContinuating] = useState(false);
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [viewMode, setViewMode] = useState<'editor' | 'timeline'>('editor');
 
   useEffect(() => {
-    const allStories = [...INITIAL_SERIES.flatMap(s => s.stories), ...INITIAL_STORIES];
-    const storyData = allStories.find(s => s.id === storyId);
-    if (storyData) setStory(storyData);
+    if (!storyId) return;
+    const allProjects: Story[] = JSON.parse(localStorage.getItem('nexora_custom_projects_v1') || '[]');
+    let storyData = allProjects.find(s => s.id === storyId);
+    
+    if (!storyData) {
+      const allInitialStories = [...INITIAL_SERIES.flatMap(s => s.stories), ...INITIAL_STORIES];
+      storyData = allInitialStories.find(s => s.id === storyId);
+    }
+    setStory(storyData || null);
+    if (storyData?.scriptLines && storyData.scriptLines.length > 0) {
+      setViewMode('timeline');
+    } else {
+      setViewMode('editor');
+    }
   }, [storyId]);
 
-  const handleAutoPipeline = async () => {
-    if (!story) return;
-    setIsProcessing(true);
-    
-    try {
-      // 1. Delegar para Worker Local (ou baixar se necessário)
-      await ensureWorker('scripting', (p) => setWorkerProgress(p));
-      setWorkerProgress(null);
-
-      // 2. Executar pipeline
-      const scriptRes = await generateStructuredScript(story.title, story.description);
-      const scenesRes = await generateScenes(story.title, story.description);
+  useEffect(() => {
+    if (story && storyId) {
+      const allProjects: Story[] = JSON.parse(localStorage.getItem('nexora_custom_projects_v1') || '[]');
+      const projectIndex = allProjects.findIndex(p => p.id === storyId);
+      const updatedProject = { ...story };
+      if (viewMode === 'editor') delete updatedProject.scriptLines;
       
-      const newScenes: Scene[] = scenesRes.map((s: any, idx: number) => ({
-        id: crypto.randomUUID(),
-        title: s.title,
-        description: s.description,
-        order: idx + 1,
-        scriptLines: scriptRes.lines?.slice(idx * 2, (idx + 1) * 2) || []
-      }));
+      let updatedProjects = projectIndex > -1 
+        ? allProjects.map(p => p.id === storyId ? updatedProject : p)
+        : [updatedProject, ...allProjects.filter(p => p.id !== storyId)];
+      
+      localStorage.setItem('nexora_custom_projects_v1', JSON.stringify(updatedProjects));
+      window.dispatchEvent(new Event('nexora_projects_updated'));
+    }
+  }, [story]);
 
-      setStory({ ...story, scenes: newScenes });
-      setActiveTab('visual');
-    } catch (error) {
-      console.error(error);
+  const handleUpdateStory = (updates: Partial<Story>) => setStory(s => s ? { ...s, ...updates } : null);
+
+  const handleAnalyzeScript = async () => {
+    if (!story?.description) return;
+    setIsAnalyzing(true);
+    try {
+      const lines = await generateStructuredScript(story.description);
+      handleUpdateStory({ scriptLines: lines });
+      setViewMode('timeline');
+    } catch(e) {
+      console.error(e);
     } finally {
-      setIsProcessing(false);
+      setIsAnalyzing(false);
     }
   };
 
-  const handleAnimateScene = (scene: Scene) => {
-    navigate('/video', { state: { story, sceneImage: scene.imageUrl, initialPrompt: scene.description } });
+  const addSceneFromLine = (line: ScriptLine) => {
+    if (!story) return;
+    const newScene: Scene = {
+      id: crypto.randomUUID(),
+      title: line.character ? `Diálogo: ${line.character}` : 'Nova Cena de Ação',
+      description: line.content,
+      order: (story.scenes?.length || 0) + 1,
+      scriptLines: []
+    };
+    handleUpdateStory({ scenes: [...(story.scenes || []), newScene] });
+  };
+  
+  const handleScenesChange = (newScenes: Scene[]) => {
+    handleUpdateStory({ scenes: newScenes });
   };
 
   if (!story) return <div className="p-20 text-center text-slate-500 font-black uppercase tracking-widest">Carregando Projeto...</div>;
@@ -62,55 +89,69 @@ export default function Roteiros() {
       <div className="flex justify-between items-end">
         <div>
           <h2 className="text-3xl font-bold mb-2 text-white">{story.title}</h2>
-          <div className="flex gap-6">
-              <button onClick={() => setActiveTab('script')} className={`text-[10px] font-black uppercase tracking-widest pb-2 border-b-2 transition-all ${activeTab === 'script' ? 'border-blue-500 text-white' : 'border-transparent text-slate-500'}`}>Roteiro</button>
-              <button onClick={() => setActiveTab('visual')} className={`text-[10px] font-black uppercase tracking-widest pb-2 border-b-2 transition-all ${activeTab === 'visual' ? 'border-blue-500 text-white' : 'border-transparent text-slate-500'}`}>Storyboard</button>
-          </div>
+          <p className="text-slate-400">Debata com o Jabuti, extraia personagens e visualize seu storyboard.</p>
         </div>
-        <div className="flex gap-3">
-            <button onClick={handleAutoPipeline} disabled={isProcessing} className="flex items-center gap-2 px-8 py-3 bg-blue-600 hover:bg-blue-500 rounded-2xl font-bold transition-all shadow-xl text-white text-xs uppercase tracking-widest">
-                {isProcessing ? (
-                    workerProgress !== null ? `Baixando Especialista: ${workerProgress}%` : 'Processando...'
-                ) : (
-                    <><Icons.Sparkles /> Orquestrar Enxame</>
-                )}
-            </button>
+        <button onClick={() => navigate('/projetos')} className="px-6 py-3 bg-slate-800 hover:bg-slate-700 rounded-2xl text-xs font-bold transition-all text-white">Voltar para Projetos</button>
+      </div>
+      
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2">
+          {viewMode === 'editor' ? (
+            <div className="bg-slate-900 border border-slate-800 rounded-[40px] p-10 min-h-[600px] shadow-2xl flex flex-col">
+              <textarea 
+                value={story.description}
+                onChange={(e) => handleUpdateStory({ description: e.target.value })}
+                className="w-full flex-1 bg-transparent border-none focus:ring-0 text-lg text-slate-300 leading-relaxed font-serif resize-none custom-scrollbar"
+                placeholder="Comece a escrever a história aqui..."
+                style={{ fontFamily: '"Courier Prime", Courier, monospace' }}
+              />
+              <div className="pt-6 border-t border-slate-800 flex items-center justify-end">
+                <button onClick={handleAnalyzeScript} disabled={isAnalyzing || !story.description} className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 rounded-2xl font-bold transition-all shadow-xl text-white text-xs uppercase tracking-widest disabled:opacity-50">
+                  {isAnalyzing ? 'Analisando...' : 'Analisar e Dividir Roteiro'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <ScriptTimeline 
+              lines={story.scriptLines || []}
+              onAddScene={addSceneFromLine}
+              onReset={() => setViewMode('editor')}
+            />
+          )}
+        </div>
+
+        <div className="space-y-6">
+          <div className="bg-slate-900 border border-slate-800 rounded-[40px] p-8 shadow-2xl sticky top-10">
+            <h3 className="text-[11px] font-black text-blue-500 uppercase tracking-[0.3em] mb-6">Elenco do Projeto</h3>
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar pr-2">
+              {story.characters && story.characters.length > 0 ? (
+                story.characters.map(char => (
+                  <div key={char.id} className="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex items-center gap-4 animate-in fade-in">
+                    <div className="w-12 h-12 rounded-lg bg-slate-800 flex items-center justify-center text-slate-700 flex-shrink-0"><Icons.Brain /></div>
+                    <div>
+                      <h4 className="font-bold text-white text-sm">{char.name}</h4>
+                      <p className="text-xs text-slate-500 line-clamp-2">{char.description}</p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-12">
+                  <p className="text-xs text-slate-600 font-bold uppercase tracking-widest">Nenhum personagem.</p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-[40px] p-10 min-h-[600px] shadow-2xl">
-          {activeTab === 'script' ? (
-              <div className="max-w-3xl mx-auto space-y-12">
-                  <textarea 
-                    value={story.description}
-                    onChange={(e) => setStory({...story, description: e.target.value})}
-                    className="w-full bg-transparent border-none focus:ring-0 text-xl text-slate-300 leading-relaxed font-serif min-h-[500px] resize-none"
-                    placeholder="Escreva a premissa aqui. O Jabuti usará um Worker local de narrativa para expandir..."
-                    style={{ fontFamily: '"Courier Prime", Courier, monospace' }}
-                  />
-              </div>
-          ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                  {story.scenes.map((scene, idx) => (
-                    <SceneBlock 
-                        key={scene.id}
-                        scene={scene}
-                        characters={[]}
-                        onAnimate={handleAnimateScene}
-                        onUpdate={(id, up) => setStory({...story, scenes: story.scenes.map(s => s.id === id ? {...s, ...up} : s)})}
-                        onDelete={(id) => setStory({...story, scenes: story.scenes.filter(s => s.id !== id)})}
-                        onMoveUp={() => {}}
-                        onMoveDown={() => {}}
-                        isFirst={idx === 0}
-                        isLast={idx === story.scenes.length - 1}
-                    />
-                  ))}
-                  <button onClick={() => {}} className="border-2 border-dashed border-slate-800 rounded-[32px] aspect-video flex flex-col items-center justify-center text-slate-700 hover:text-blue-500 hover:border-blue-500 transition-all bg-slate-950/20">
-                    <Icons.Plus />
-                    <span className="text-[10px] font-black uppercase tracking-widest mt-4">Adicionar Cena</span>
-                  </button>
-              </div>
-          )}
+      <div className="space-y-6 pt-10 border-t border-slate-800/50">
+        <h2 className="text-2xl font-bold text-white">Storyboard Visual</h2>
+        <Storyboard
+          scenes={story.scenes || []}
+          characters={story.characters || []}
+          onScenesChange={handleScenesChange}
+          onAnimateScene={(scene) => navigate('/video', { state: { initialPrompt: scene.description, sceneImage: scene.imageUrl } })}
+        />
       </div>
     </div>
   );

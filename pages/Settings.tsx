@@ -11,8 +11,8 @@ const INITIAL_CLOUD_MODELS: AIConfiguration[] = [
 ];
 
 const INITIAL_LOCAL_MODELS: LocalModelDeployment[] = [
-  { id: 'l1', name: 'Jabuti Local (Llama 3)', size: '4.8GB', status: 'ready', progress: 100, type: 'core', capability: 'text', vramRequiredGb: 6.0 },
-  { id: 'l2', name: 'ArtFlow Local', size: '2.1GB', status: 'not_installed', progress: 0, type: 'specialized', capability: 'image', vramRequiredGb: 4.0 },
+  { id: 'l1', name: 'Jabuti Local (Llama 3)', size: '4.8GB', status: 'ready', progress: 100, type: 'core', capability: 'text', vramRequiredGb: 6.0, isActive: true },
+  { id: 'l2', name: 'ArtFlow Local', size: '2.1GB', status: 'not_installed', progress: 0, type: 'specialized', capability: 'image', vramRequiredGb: 4.0, isActive: false },
 ];
 
 export default function Settings() {
@@ -62,6 +62,22 @@ export default function Settings() {
         });
     };
 
+    const toggleLocalModel = (id: string) => {
+        setSettings(prev => {
+            const newLocalModels = prev.localModels.map(m => m.id === id ? { ...m, isActive: !m.isActive } : m);
+            const deactivatedModel = newLocalModels.find(m => m.id === id);
+    
+            if (prev.primaryBrainId === id && !deactivatedModel?.isActive) {
+                return {
+                    ...prev,
+                    localModels: newLocalModels,
+                    primaryBrainId: 'g1' 
+                };
+            }
+            return { ...prev, localModels: newLocalModels };
+        });
+    };
+
     const deleteModel = (id: string) => {
         setSettings({
             ...settings,
@@ -82,7 +98,7 @@ export default function Settings() {
         });
         setSettings(prev => ({
             ...prev,
-            localModels: prev.localModels.map(m => m.id === id ? { ...m, status: 'ready', progress: 100 } : m)
+            localModels: prev.localModels.map(m => m.id === id ? { ...m, status: 'ready', progress: 100, isActive: true } : m)
         }));
     };
 
@@ -99,6 +115,24 @@ export default function Settings() {
                 >
                   <Icons.Plus /> IA Forge
                 </button>
+            </div>
+            
+            <div className="bg-slate-900 border border-slate-800 rounded-[32px] p-8">
+                <h3 className="text-lg font-bold text-white mb-4">Interface & Acessibilidade</h3>
+                <div className="flex items-center justify-between py-4 border-t border-slate-800">
+                    <div>
+                        <p className="font-bold text-slate-200">Ativação por Voz "Jabuti"</p>
+                        <p className="text-xs text-slate-500 max-w-md">Permite que o assistente de voz seja ativado ao dizer "Jabuti" em qualquer tela. Requer permissão de microfone.</p>
+                    </div>
+                    <button
+                        onClick={() => setSettings(s => ({ ...s, voiceActivation: !s.voiceActivation }))}
+                        className={`relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-colors ease-in-out duration-200 focus:outline-none ${settings.voiceActivation ? 'bg-blue-600' : 'bg-slate-700'}`}
+                    >
+                        <span
+                            className={`inline-block h-5 w-5 rounded-full bg-white shadow transform ring-0 transition ease-in-out duration-200 ${settings.voiceActivation ? 'translate-x-5' : 'translate-x-0'}`}
+                        />
+                    </button>
+                </div>
             </div>
 
             <div className="flex bg-slate-900 p-1.5 rounded-2xl border border-slate-800 w-fit">
@@ -139,7 +173,7 @@ export default function Settings() {
             ) : activeTab === 'local' ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     {settings.localModels.map(model => (
-                        <div key={model.id} className="p-8 bg-slate-900 border border-slate-800 rounded-[40px] space-y-6">
+                        <div key={model.id} className={`p-8 bg-slate-900 border rounded-[40px] space-y-6 transition-all ${!model.isActive && 'grayscale blur-[1px]'} ${settings.primaryBrainId === model.id ? 'border-purple-500 bg-purple-500/5' : 'border-slate-800'}`}>
                             <div className="flex justify-between items-start">
                                 <div>
                                     <h4 className="text-xl font-bold text-white">{model.name}</h4>
@@ -148,9 +182,14 @@ export default function Settings() {
                                 <div className="text-purple-500"><Icons.BrainCircuit /></div>
                             </div>
                             {model.status === 'ready' ? (
-                                <button onClick={() => setSettings({...settings, primaryBrainId: model.id})} className={`w-full py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all ${settings.primaryBrainId === model.id ? 'bg-purple-600 text-white shadow-xl' : 'bg-slate-800 text-slate-500 hover:text-white'}`}>
-                                    {settings.primaryBrainId === model.id ? 'CÉREBRO LOCAL ATIVO' : 'ATIVAR LOCAL MASTER'}
-                                </button>
+                                <div className="flex items-center gap-4">
+                                    <button onClick={() => setSettings({...settings, primaryBrainId: model.id})} disabled={!model.isActive} className={`flex-1 py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all ${settings.primaryBrainId === model.id ? 'bg-purple-600 text-white shadow-xl' : 'bg-slate-800 text-slate-500 hover:text-white'} disabled:opacity-50 disabled:cursor-not-allowed`}>
+                                        {settings.primaryBrainId === model.id ? 'CÉREBRO LOCAL ATIVO' : 'ATIVAR LOCAL MASTER'}
+                                    </button>
+                                    <button onClick={() => toggleLocalModel(model.id)} className={`px-4 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${model.isActive ? 'text-red-500 hover:bg-red-500/10' : 'text-emerald-500 hover:bg-emerald-500/10'}`}>
+                                        {model.isActive ? 'DESATIVAR' : 'ATIVAR'}
+                                    </button>
+                                </div>
                             ) : (
                                 <div className="space-y-2">
                                     <button onClick={() => downloadLocal(model.id)} disabled={model.status === 'downloading'} className="w-full py-4 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-2xl font-black text-xs uppercase tracking-widest">
