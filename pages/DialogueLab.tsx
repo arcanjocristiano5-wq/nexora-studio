@@ -17,8 +17,9 @@ export default function DialogueLab() {
   const [isCloneModalOpen, setIsCloneModalOpen] = useState(false);
   const [selectedEmotion, setSelectedEmotion] = useState('Padrão');
   
-  const [engine, setEngine] = useState<'local' | 'cloud'>('local');
+  const [engine, setEngine] = useState<'local' | 'cloud'>('cloud');
   const [hardware, setHardware] = useState<any>(null);
+  const [characterVoices, setCharacterVoices] = useState<Record<string, string>>({});
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const currentSourceRef = useRef<AudioBufferSourceNode | null>(null);
@@ -27,45 +28,76 @@ export default function DialogueLab() {
     checkHardwareCapability().then(setHardware);
   }, []);
 
+  useEffect(() => {
+    const detected: Record<string, string> = {};
+    const regex = /^([A-Z\s_0-9]+):/gm;
+    let match;
+    const availableVoices = voices.filter(v => v.type === 'prebuilt');
+    if (availableVoices.length === 0) return;
+
+    let voiceIndex = 0;
+    while ((match = regex.exec(script)) !== null) {
+      const charName = match[1].trim();
+      if (!detected[charName]) {
+        detected[charName] = availableVoices[voiceIndex % availableVoices.length].apiName;
+        voiceIndex++;
+      }
+    }
+    
+    const finalVoices: Record<string, string> = {};
+    for (const char in detected) {
+        finalVoices[char] = characterVoices[char] || detected[char];
+    }
+    
+    if (Object.keys(finalVoices).length > 0 && Object.keys(finalVoices).join(',') !== Object.keys(characterVoices).join(',')) {
+      setCharacterVoices(finalVoices);
+    }
+
+  }, [script, voices]);
+
   const handleTableRead = async () => {
     if (!script.trim() || isGenerating) return;
     setIsGenerating(true);
     
     try {
-      const characters = [
-        { name: 'PROTAGONISTA', voice: voices.find(v => v.type === 'prebuilt')?.apiName || 'Puck' },
-        { name: 'COADJUVANTE', voice: voices.filter(v => v.type === 'prebuilt')[1]?.apiName || 'Kore' }
-      ];
+      // FIX: Explicitly type the arguments from Object.entries to resolve TypeScript inference issue where `voice` was treated as `unknown`.
+      const characters = Object.entries(characterVoices).map(([name, voice]: [string, string]) => ({ name, voice }));
 
       if (engine === 'local') {
           window.speechSynthesis.cancel();
           const utterance = new SpeechSynthesisUtterance(script);
           utterance.lang = 'pt-BR';
           utterance.onstart = () => setIsPlaying(true);
-          utterance.onend = () => setIsPlaying(false);
+          utterance.onend = () => { setIsPlaying(false); setIsGenerating(false); };
           utterance.onerror = () => { setIsPlaying(false); setIsGenerating(false); };
           window.speechSynthesis.speak(utterance);
           return;
       }
+      
+      if (characters.length < 2) {
+        alert("A leitura de mesa na nuvem requer pelo menos dois personagens distintos no roteiro (Ex: NOME_DO_PERSONAGEM: ...).");
+        setIsGenerating(false);
+        return;
+      }
 
-      // Fixed: Removed extra arguments to match generateDialogue signature
-      const base64Audio = await generateDialogue(
-          script, 
-          characters
-      );
+      const base64Audio = await generateDialogue(script, characters);
 
       if (base64Audio) {
-        if (!audioContextRef.current) {
+        if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
           audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
         }
+        
+        const decodedString = base64Audio.split(',')[1];
         const audioBuffer = await decodeAudioData(
-          decodeAudio(base64Audio),
+          decodeAudio(decodedString),
           audioContextRef.current,
           24000,
           1
         );
         
-        if (currentSourceRef.current) currentSourceRef.current.stop();
+        if (currentSourceRef.current) {
+            try { currentSourceRef.current.stop(); } catch(e) {}
+        }
         
         const source = audioContextRef.current.createBufferSource();
         source.buffer = audioBuffer;
@@ -78,8 +110,9 @@ export default function DialogueLab() {
       }
     } catch (error) {
       console.error("Falha na geração de áudio:", error);
+      alert("Ocorreu um erro ao gerar o áudio. Verifique o console.");
     } finally {
-      setIsGenerating(false);
+      if(engine === 'cloud') setIsGenerating(false);
     }
   };
 
@@ -87,10 +120,12 @@ export default function DialogueLab() {
     if (engine === 'local') {
         window.speechSynthesis.cancel();
     } else if (currentSourceRef.current) {
-      currentSourceRef.current.stop();
+        try { currentSourceRef.current.stop(); } catch(e) {}
     }
     setIsPlaying(false);
   };
+  
+  const detectedCharacters = useMemo(() => Object.keys(characterVoices), [characterVoices]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
@@ -112,11 +147,12 @@ export default function DialogueLab() {
             <textarea
               value={script}
               onChange={(e) => setScript(e.target.value)}
-              className="flex-1 bg-transparent border-none focus:ring-0 text-lg leading-relaxed font-mono placeholder:text-slate-700 resize-none"
+              className="flex-1 bg-transparent border-none focus:ring-0 text-lg leading-relaxed font-mono placeholder:text-slate-700 resize-none custom-scrollbar"
               style={{ fontFamily: '"Courier Prime", Courier, monospace' }}
+              placeholder="Digite seu roteiro aqui. Use o formato: NOME_DO_PERSONAGEM: ..."
             />
             <div className="flex justify-between items-center mt-4 pt-4 border-t border-slate-800">
-                <select value={selectedEmotion} onChange={(e) => setSelectedEmotion(e.target.value)} className="bg-slate-800 text-xs text-white border-slate-700 rounded-lg p-2">
+                <select value={selectedEmotion} onChange={(e) => setSelectedEmotion(e.target.value)} className="bg-slate-800 text-xs text-white border-slate-700 rounded-lg p-2" disabled>
                     {emotions.map(e => <option key={e} value={e}>{e}</option>)}
                 </select>
                 <button onClick={isPlaying ? stopPlayback : handleTableRead} disabled={isGenerating} className={`flex items-center gap-3 px-8 py-3 rounded-xl font-bold transition-all ${isPlaying ? 'bg-red-600' : 'bg-blue-600'} text-white`}>
@@ -128,7 +164,30 @@ export default function DialogueLab() {
 
         <div className="space-y-6">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Vozes do Elenco</h3>
+            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Elenco da Cena</h3>
+            {detectedCharacters.length > 0 ? (
+                <div className="space-y-3">
+                    {detectedCharacters.map(charName => (
+                        <div key={charName} className="grid grid-cols-[1fr,1fr] items-center gap-2">
+                            <span className="text-sm font-bold text-white truncate">{charName}</span>
+                            <select
+                                value={characterVoices[charName]}
+                                onChange={e => setCharacterVoices(prev => ({ ...prev, [charName]: e.target.value }))}
+                                className="bg-slate-800 text-xs text-white border border-slate-700 rounded-lg p-2 w-full focus:ring-1 focus:ring-blue-500 outline-none"
+                            >
+                                {voices.filter(v => v.type === 'prebuilt').map(v => (
+                                    <option key={v.apiName} value={v.apiName}>{v.name} ({v.gender})</option>
+                                ))}
+                            </select>
+                        </div>
+                    ))}
+                </div>
+            ) : (
+                <p className="text-xs text-slate-600 text-center py-4">Nenhum personagem detectado no roteiro.</p>
+            )}
+          </div>
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Vozes Disponíveis</h3>
             <div className="space-y-2">
               {voices.map(v => (
                 <div key={v.name} className="p-3 bg-slate-800 rounded-lg border border-slate-700 flex justify-between items-center">

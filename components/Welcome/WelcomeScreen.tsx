@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import Logo from '../Brand/Logo';
 
@@ -76,6 +75,16 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onComplete }) => {
           {stageMessages[stage]}
           <span className="inline-block w-2 h-5 bg-blue-500 ml-1 -mb-1 blinking-cursor" />
         </p>
+
+        <style>{`
+            .blinking-cursor {
+                animation: blink 1s step-end infinite;
+            }
+            @keyframes blink {
+                from, to { color: transparent }
+                50% { color: var(--accent-blue); }
+            }
+        `}</style>
 
         <div className="mt-12 space-y-3">
           <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden border border-slate-700">

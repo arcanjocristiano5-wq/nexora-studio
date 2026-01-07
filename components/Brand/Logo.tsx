@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 interface LogoProps {
@@ -43,7 +42,6 @@ const Logo: React.FC<LogoProps> = ({ className = "", size = 40 }) => {
           </filter>
         </defs>
 
-        {/* Outer Ring / Portal */}
         <circle
           cx="50"
           cy="50"
@@ -54,7 +52,6 @@ const Logo: React.FC<LogoProps> = ({ className = "", size = 40 }) => {
           className="animate-[spin_20s_linear_infinite]"
         />
 
-        {/* 3D "X" Nexus Shape */}
         <g filter="url(#3d-depth)">
           <path
             d="M30 30 L70 70 M70 30 L30 70"
@@ -77,7 +74,6 @@ const Logo: React.FC<LogoProps> = ({ className = "", size = 40 }) => {
           />
         </g>
 
-        {/* Center Core Glow */}
         <circle cx="50" cy="50" r="5" fill="white" className="animate-pulse">
             <animate attributeName="r" values="4;6;4" dur="2s" repeatCount="indefinite" />
         </circle>

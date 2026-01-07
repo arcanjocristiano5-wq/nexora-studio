@@ -136,19 +136,40 @@ export const createProjectWithAI = async (prompt: string, type: 'story' | 'serie
 export const generateDialogue = async (text: string, characters?: { name: string, voice: string }[]): Promise<string | null> => {
     if (!text?.trim()) return null;
     const ai = getAI();
+    
+    let speechConfig: any;
+    let prompt = text;
+
+    if (characters && characters.length >= 2) {
+        speechConfig = {
+            multiSpeakerVoiceConfig: {
+                speakerVoiceConfigs: characters.map(char => ({
+                    speaker: char.name,
+                    voiceConfig: { prebuiltVoiceConfig: { voiceName: char.voice } }
+                }))
+            }
+        };
+        const characterNames = characters.map(c => c.name).join(' e ');
+        prompt = `TTS the following conversation between ${characterNames}:\n${text}`;
+    } else {
+        speechConfig = { 
+            voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } } 
+        };
+    }
+
     const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text }] }],
+        contents: [{ parts: [{ text: prompt }] }],
         config: {
             responseModalities: [Modality.AUDIO],
-            speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } } },
+            speechConfig: speechConfig,
         },
     });
+
     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
     return base64Audio ? `data:audio/pcm;base64,${base64Audio}` : null;
 };
 
-// FIX: Added missing scoutLocations member using Google Maps grounding.
 export const scoutLocations = async (query: string, lat?: number, lng?: number): Promise<{ text: string; locations: LocationInspiration[] }> => {
   const ai = getAI();
   const response = await ai.models.generateContent({
@@ -176,7 +197,6 @@ export const scoutLocations = async (query: string, lat?: number, lng?: number):
   return { text, locations };
 };
 
-// FIX: Added missing continueScript member.
 export const continueScript = async (currentScript: string): Promise<string> => {
   const ai = getAI();
   const response = await ai.models.generateContent({
@@ -186,7 +206,6 @@ export const continueScript = async (currentScript: string): Promise<string> => 
   return response.text || "";
 };
 
-// FIX: Added missing extractCharacters member.
 export const extractCharacters = async (description: string): Promise<Character[]> => {
   const ai = getAI();
   const response = await ai.models.generateContent({
@@ -218,7 +237,6 @@ export const extractCharacters = async (description: string): Promise<Character[
   }
 };
 
-// FIX: Added missing startFullAutoProduction member to orchestrate the auto-production flow.
 export const startFullAutoProduction = async (story: Story, onProgress: (update: any) => void) => {
   const ai = getAI();
   let currentStory = { ...story };
@@ -250,7 +268,7 @@ export const startFullAutoProduction = async (story: Story, onProgress: (update:
     if (audioUrl) currentStory.scenes[i].dialogueAudioUrl = audioUrl;
 
     onProgress({ message: `Renderizando vídeo (Veo) para cena ${i+1}...`, story: currentStory, overallProgress: progressBase + 10 });
-    const videoUrl = await generateVideoContent(scene.description, imgUrl || undefined);
+    const videoUrl = await generateVideoContent(scene.description, imgUrl || undefined, '16:9');
     if (videoUrl) currentStory.scenes[i].videoUrl = videoUrl;
   }
 
@@ -373,7 +391,6 @@ export const auditCompetitorLink = async (url: string, niche: string) => {
   return { ...data, sources };
 };
 
-// FIX: Update generateMarketingSwarm return type to include selectedVariantId.
 export const generateMarketingSwarm = async (t: string, d: string, p: string): Promise<MarketingPackage> => {
   const ai = getAI();
   const response = await ai.models.generateContent({
@@ -434,7 +451,6 @@ export const analyzeChannelPostPattern = async (u: string) => {
   };
 };
 
-// FIX: Update generateVideoContent to accept onProgress callback and match 4 arguments in Studio.tsx.
 export const generateVideoContent = async (p: string, i?: string, a?: string, onProgress?: (msg: string) => void) => {
   if (onProgress) onProgress("Iniciando motores de vídeo...");
   const ai = getAI();

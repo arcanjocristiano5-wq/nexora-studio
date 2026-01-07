@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { GoogleGenAI, Modality } from '@google/genai';
 import { createPcmBlob, decodeAudio, decodeAudioData } from '../../services/audioUtils';
@@ -11,21 +10,23 @@ const DirectorOverlay: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const sessionRef = useRef<any>(null);
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const nextStartTimeRef = useRef<number>(0);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);
 
   const startSession = async () => {
     setIsConnecting(true);
     setError(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
       const inputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       const outputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       audioContextsRef.current = { input: inputCtx, output: outputCtx };
 
-      // Initialize GoogleGenAI with API key from environment exclusively
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       
       const sessionPromise = ai.live.connect({
-        model: 'gemini-2.5-flash-native-audio-preview-09-2025',
+        model: 'gemini-2.5-flash-native-audio-preview-12-2025',
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
@@ -39,10 +40,10 @@ const DirectorOverlay: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             setIsConnecting(false);
             const source = inputCtx.createMediaStreamSource(stream);
             const scriptProcessor = inputCtx.createScriptProcessor(4096, 1, 1);
+            scriptProcessorRef.current = scriptProcessor;
             scriptProcessor.onaudioprocess = (e) => {
               const inputData = e.inputBuffer.getChannelData(0);
               const pcmBlob = createPcmBlob(inputData);
-              // Guidelines: Ensure data is streamed only after the session promise resolves
               sessionPromise.then(session => {
                 session.sendRealtimeInput({ media: pcmBlob });
               });
@@ -91,14 +92,32 @@ const DirectorOverlay: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     }
   };
 
-  useEffect(() => {
-    startSession();
-    return () => {
-      if (sessionRef.current) sessionRef.current.close();
+  const cleanup = () => {
+      if (sessionRef.current) {
+        sessionRef.current.close();
+        sessionRef.current = null;
+      }
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(track => track.stop());
+        mediaStreamRef.current = null;
+      }
+      if (scriptProcessorRef.current) {
+        scriptProcessorRef.current.disconnect();
+        scriptProcessorRef.current = null;
+      }
       if (audioContextsRef.current) {
         audioContextsRef.current.input.close();
         audioContextsRef.current.output.close();
+        audioContextsRef.current = null;
       }
+      sourcesRef.current.forEach(s => s.stop());
+      sourcesRef.current.clear();
+  };
+
+  useEffect(() => {
+    startSession();
+    return () => {
+      cleanup();
     };
   }, []);
 

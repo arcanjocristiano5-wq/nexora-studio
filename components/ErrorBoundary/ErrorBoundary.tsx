@@ -10,11 +10,7 @@ interface State {
   error: Error | null;
 }
 
-/**
- * ErrorBoundary componente para capturar anomalias no fluxo da NEXORA.
- */
-// FIX: The ErrorBoundary class must extend React.Component to be a valid React component. This provides access to lifecycle methods and properties like `state`, `props`, and `setState`, resolving the reported errors.
-// FIX: Extended React.Component to make this a valid class component, giving it access to `this.props` and `this.setState`.
+// FIX: To function as a React Error Boundary, this class must extend React.Component. This provides access to lifecycle methods, state (`this.setState`), and props (`this.props`).
 class ErrorBoundary extends React.Component<Props, State> {
   public state: State = {
     hasError: false,

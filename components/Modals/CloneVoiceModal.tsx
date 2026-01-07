@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Icons } from '../../constants';
 
@@ -28,21 +27,43 @@ const CloneVoiceModal: React.FC<CloneVoiceModalProps> = ({ isOpen, onClose, onVo
   }, [isOpen]);
 
   const handleStartRecording = async () => {
-    // ... lógica de gravação existente
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorderRef.current = new MediaRecorder(stream);
+        audioChunksRef.current = [];
+        mediaRecorderRef.current.ondataavailable = (e) => {
+            audioChunksRef.current.push(e.data);
+        };
+        mediaRecorderRef.current.onstop = () => {
+            const blob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+            setAudioBlob(blob);
+            setFileName('Gravação.wav');
+        };
+        mediaRecorderRef.current.start();
+        setIsRecording(true);
+    } catch (err) {
+        alert("Não foi possível acessar o microfone.");
+    }
   };
   
   const handleStopRecording = () => {
-    // ... lógica de parada de gravação existente
+    if (mediaRecorderRef.current && isRecording) {
+        mediaRecorderRef.current.stop();
+        setIsRecording(false);
+    }
   };
   
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // ... lógica de upload existente
+    const file = e.target.files?.[0];
+    if(file){
+        setAudioBlob(file);
+        setFileName(file.name);
+    }
   };
   
   const handleSave = async () => {
     if (voiceName.trim() && audioBlob) {
       setIsAnalyzing(true);
-      // Simula a análise de IA
       await new Promise(res => setTimeout(res, 2000));
       setIsAnalyzing(false);
       onVoiceCloned(voiceName);
@@ -72,7 +93,7 @@ const CloneVoiceModal: React.FC<CloneVoiceModalProps> = ({ isOpen, onClose, onVo
               value={voiceName}
               onChange={(e) => setVoiceName(e.target.value)}
               placeholder="Ex: Herói Cansado"
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all text-white"
             />
           </div>
 
@@ -83,7 +104,21 @@ const CloneVoiceModal: React.FC<CloneVoiceModalProps> = ({ isOpen, onClose, onVo
           </div>
           
           <div className="grid grid-cols-2 gap-4">
-             {/* ... botões de gravação e upload ... */}
+             <button
+                onClick={isRecording ? handleStopRecording : handleStartRecording}
+                className={`flex flex-col items-center justify-center gap-2 p-6 rounded-2xl border-2 transition-all ${isRecording ? 'bg-red-500/10 border-red-500' : 'bg-slate-800 border-slate-700 hover:border-slate-600'}`}
+             >
+                <Icons.Music />
+                <span className="text-xs font-bold">{isRecording ? 'Parar Gravação' : 'Gravar Amostra'}</span>
+             </button>
+             <button
+                onClick={() => document.getElementById('audio-upload')?.click()}
+                className="flex flex-col items-center justify-center gap-2 p-6 rounded-2xl border-2 border-slate-700 hover:border-slate-600 bg-slate-800 transition-all"
+             >
+                <Icons.Folder />
+                <span className="text-xs font-bold">Upload de Áudio</span>
+                <input id="audio-upload" type="file" className="hidden" accept="audio/*" onChange={handleFileUpload} />
+             </button>
           </div>
 
           {fileName && (
@@ -102,14 +137,14 @@ const CloneVoiceModal: React.FC<CloneVoiceModalProps> = ({ isOpen, onClose, onVo
         <div className="p-6 border-t border-slate-800 bg-slate-900/50 flex justify-end gap-4">
           <button 
             onClick={onClose}
-            className="px-6 py-2.5 bg-slate-800 hover:bg-slate-700 rounded-xl text-sm font-bold transition-all"
+            className="px-6 py-2.5 bg-slate-800 hover:bg-slate-700 rounded-xl text-sm font-bold transition-all text-white"
           >
             Cancelar
           </button>
           <button 
             onClick={handleSave}
             disabled={!voiceName.trim() || !audioBlob || isAnalyzing}
-            className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 rounded-xl text-sm font-bold transition-all disabled:opacity-50 flex items-center gap-2"
+            className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 rounded-xl text-sm font-bold transition-all disabled:opacity-50 flex items-center gap-2 text-white"
           >
             {isAnalyzing && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
             {isAnalyzing ? 'Processando...' : 'Salvar Voz Clonada'}

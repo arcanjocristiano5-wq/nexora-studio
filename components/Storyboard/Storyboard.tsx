@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Scene, Character } from '../../types';
 import SceneBlock from './SceneBlock';
@@ -18,7 +17,7 @@ const Storyboard: React.FC<StoryboardProps> = ({ scenes, characters, visualStyle
       id: crypto.randomUUID(),
       title: 'Nova Cena',
       description: '',
-      order: scenes.length + 1,
+      order: (scenes.length > 0 ? Math.max(...scenes.map(s => s.order)) : 0) + 1,
       scriptLines: []
     };
     onScenesChange([...scenes, newScene]);

@@ -1,9 +1,8 @@
-
-import React, { useState, memo } from 'react';
+import React, { useState, memo, useRef } from 'react';
 import { Scene } from '../../types';
-// FIX: Removed 'generateScript' which is not exported from geminiService.
 import { generateConceptArt, generateDialogue } from '../../services/geminiService';
 import { Icons, VISUAL_STYLES } from '../../constants';
+import { decodeAudio, decodeAudioData } from '../../services/audioUtils';
 
 interface SceneBlockProps {
   scene: Scene;
@@ -32,7 +31,8 @@ const SceneBlock: React.FC<SceneBlockProps> = ({
 }) => {
   const [isGeneratingImg, setIsGeneratingImg] = useState(false);
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
-  const [showScript, setShowScript] = useState(false);
+  // FIX: useRef was not imported from React.
+  const audioRef = useRef<HTMLAudioElement>(null);
 
   const handleGenerateImage = async () => {
     setIsGeneratingImg(true);
@@ -110,7 +110,7 @@ const SceneBlock: React.FC<SceneBlockProps> = ({
         />
         <div className="pt-3 border-t border-slate-800/50">
           {scene.dialogueAudioUrl ? (
-             <audio src={scene.dialogueAudioUrl} controls className="w-full h-8" />
+             <audio ref={audioRef} src={scene.dialogueAudioUrl} controls className="w-full h-8" />
           ) : (
             <button onClick={handleGenerateAudio} disabled={isGeneratingAudio} className="w-full text-center px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-[10px] font-bold transition-all flex items-center justify-center gap-2 text-white uppercase tracking-widest">
               {isGeneratingAudio ? <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <Icons.Music />}

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Character } from '../../types';
 import { Icons } from '../../constants';

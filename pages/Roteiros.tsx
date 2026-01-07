@@ -2,8 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Story, Character, Scene, ScriptLine } from '../types';
-import { Icons, INITIAL_SERIES, INITIAL_STORIES } from '../constants';
-import { continueScript, extractCharacters, generateStructuredScript } from '../services/geminiService';
+import { Icons, INITIAL_SERIES, INITIAL_STORIES, VISUAL_STYLES } from '../constants';
+import { extractCharacters, generateStructuredScript } from '../services/geminiService';
 import Storyboard from '../components/Storyboard/Storyboard';
 import ScriptTimeline from '../components/Roteiro/ScriptTimeline';
 
@@ -12,7 +12,6 @@ export default function Roteiros() {
   const { storyId } = useParams<{ storyId: string }>();
   
   const [story, setStory] = useState<Story | null>(null);
-  const [isContinuating, setIsContinuating] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [viewMode, setViewMode] = useState<'editor' | 'timeline'>('editor');
@@ -39,7 +38,10 @@ export default function Roteiros() {
       const allProjects: Story[] = JSON.parse(localStorage.getItem('nexora_custom_projects_v1') || '[]');
       const projectIndex = allProjects.findIndex(p => p.id === storyId);
       const updatedProject = { ...story };
-      if (viewMode === 'editor') delete updatedProject.scriptLines;
+      if (viewMode === 'editor' && updatedProject.scriptLines) {
+        // Não salva a timeline se estiver no modo editor puro
+        // delete updatedProject.scriptLines;
+      }
       
       let updatedProjects = projectIndex > -1 
         ? allProjects.map(p => p.id === storyId ? updatedProject : p)
@@ -65,6 +67,30 @@ export default function Roteiros() {
       setIsAnalyzing(false);
     }
   };
+  
+  const handleExtractCharacters = async () => {
+    if (!story?.description) return;
+    setIsExtracting(true);
+    try {
+      const newChars = await extractCharacters(story.description);
+      if (newChars.length > 0) {
+        setStory(s => {
+          if (!s) return null;
+          const existingNames = new Set((s.characters || []).map(c => c.name));
+          const trulyNewChars = newChars.filter(nc => !existingNames.has(nc.name));
+          alert(`${trulyNewChars.length} novos personagens foram extraídos e adicionados ao elenco do projeto.`);
+          return { ...s, characters: [...(s.characters || []), ...trulyNewChars] };
+        });
+      } else {
+        alert("Nenhum novo personagem encontrado no roteiro.");
+      }
+    } catch (e) {
+      console.error("Erro ao extrair personagens:", e);
+      alert("O Jabuti não conseguiu extrair os personagens. Tente refinar o roteiro.");
+    } finally {
+      setIsExtracting(false);
+    }
+  };
 
   const addSceneFromLine = (line: ScriptLine) => {
     if (!story) return;
@@ -86,12 +112,27 @@ export default function Roteiros() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700 pb-20">
-      <div className="flex justify-between items-end">
+      <div className="flex justify-between items-start">
         <div>
           <h2 className="text-3xl font-bold mb-2 text-white">{story.title}</h2>
           <p className="text-slate-400">Debata com o Jabuti, extraia personagens e visualize seu storyboard.</p>
         </div>
-        <button onClick={() => navigate('/projetos')} className="px-6 py-3 bg-slate-800 hover:bg-slate-700 rounded-2xl text-xs font-bold transition-all text-white">Voltar para Projetos</button>
+        <div className="flex items-center gap-4">
+          <div className="flex-shrink-0">
+            <label htmlFor="visual-style-select" className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 text-right">Estilo Visual</label>
+            <select
+              id="visual-style-select"
+              value={story.visualStyleId || ''}
+              onChange={(e) => handleUpdateStory({ visualStyleId: e.target.value })}
+              className="bg-slate-800 text-sm text-white border border-slate-700 rounded-lg p-2 focus:ring-1 focus:ring-blue-500 outline-none w-full max-w-[200px]"
+            >
+              {VISUAL_STYLES.map(style => (
+                <option key={style.id} value={style.id}>{style.name}</option>
+              ))}
+            </select>
+          </div>
+          <button onClick={() => navigate('/projetos')} className="px-6 py-3 bg-slate-800 hover:bg-slate-700 rounded-2xl text-xs font-bold transition-all text-white self-end">Voltar</button>
+        </div>
       </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -105,9 +146,12 @@ export default function Roteiros() {
                 placeholder="Comece a escrever a história aqui..."
                 style={{ fontFamily: '"Courier Prime", Courier, monospace' }}
               />
-              <div className="pt-6 border-t border-slate-800 flex items-center justify-end">
+              <div className="pt-6 border-t border-slate-800 flex items-center justify-end gap-4">
+                <button onClick={handleExtractCharacters} disabled={isExtracting || !story.description} className="flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-2xl font-bold transition-all shadow-xl text-white text-xs uppercase tracking-widest disabled:opacity-50">
+                  {isExtracting ? 'Extraindo...' : 'Extrair Personagens'}
+                </button>
                 <button onClick={handleAnalyzeScript} disabled={isAnalyzing || !story.description} className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 rounded-2xl font-bold transition-all shadow-xl text-white text-xs uppercase tracking-widest disabled:opacity-50">
-                  {isAnalyzing ? 'Analisando...' : 'Analisar e Dividir Roteiro'}
+                  {isAnalyzing ? 'Analisando...' : 'Analisar Roteiro'}
                 </button>
               </div>
             </div>
@@ -149,6 +193,7 @@ export default function Roteiros() {
         <Storyboard
           scenes={story.scenes || []}
           characters={story.characters || []}
+          visualStyleId={story.visualStyleId}
           onScenesChange={handleScenesChange}
           onAnimateScene={(scene) => navigate('/video', { state: { initialPrompt: scene.description, sceneImage: scene.imageUrl } })}
         />

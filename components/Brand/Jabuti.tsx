@@ -1,4 +1,3 @@
-
 import React from 'react';
 import './Jabuti.css';
 
@@ -26,7 +25,6 @@ const Jabuti: React.FC<JabutiProps> = ({ state = 'idle', subState }) => {
           </filter>
         </defs>
 
-        {/* JABUTI PADRÃO */}
         <g className="jabuti-main-group" filter="url(#jabuti-shadow)">
           <ellipse cx="110" cy="240" rx="18" ry="8" fill="url(#body-grad-3d)" />
           <ellipse cx="190" cy="240" rx="18" ry="8" fill="url(#body-grad-3d)" />

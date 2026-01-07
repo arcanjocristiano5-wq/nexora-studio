@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import Jabuti from '../Brand/Jabuti';
 
@@ -16,7 +15,6 @@ const ErrorOverlay: React.FC<ErrorOverlayProps> = ({ error, resetErrorBoundary }
 
     useEffect(() => {
         const analyze = setTimeout(() => {
-            // Simulação: sempre falha para mostrar ao usuário os detalhes para depuração.
             setAnalysisState('failed');
         }, 3000);
 

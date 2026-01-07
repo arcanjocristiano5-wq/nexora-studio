@@ -1,10 +1,9 @@
-
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { talkToJabuti, generateDialogue } from '../../services/geminiService';
 import { Icons } from '../../constants';
 import Jabuti from '../Brand/Jabuti';
 import { SystemSettings } from '../../types';
+import { decodeAudio, decodeAudioData } from '../../services/audioUtils';
 
 export default function JabutiAssistant({ onClose }: { onClose: () => void }) {
   const [messages, setMessages] = useState<any[]>([]);
@@ -16,10 +15,18 @@ export default function JabutiAssistant({ onClose }: { onClose: () => void }) {
   
   const recognitionRef = useRef<any>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const currentSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
   useEffect(() => {
-    const settings = JSON.parse(localStorage.getItem('nexora_system_settings_v4') || '{}');
-    if (settings.primaryBrainId?.startsWith('l')) setEngineType('local');
+    const settingsRaw = localStorage.getItem('nexora_system_settings_v4');
+    if (settingsRaw) {
+        const settings: SystemSettings = JSON.parse(settingsRaw);
+        if (settings.primaryBrainId?.startsWith('l')) {
+            setEngineType('local');
+        } else {
+            setEngineType('cloud');
+        }
+    }
   }, []);
 
   useEffect(() => {
@@ -28,16 +35,33 @@ export default function JabutiAssistant({ onClose }: { onClose: () => void }) {
 
   const speak = async (text: string) => {
     if (engineType === 'local') {
+        window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = 'pt-BR';
         utterance.rate = 1.1;
         window.speechSynthesis.speak(utterance);
         return;
     }
-    const audioUrl = await generateDialogue(text);
-    if (audioUrl) {
-        const audio = new Audio(audioUrl);
-        audio.play();
+
+    try {
+        const base64Audio = await generateDialogue(text);
+        if (base64Audio) {
+            if (!audioContextRef.current) {
+              audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+            }
+            const audioData = decodeAudio(base64Audio.replace('data:audio/pcm;base64,', ''));
+            const audioBuffer = await decodeAudioData(audioData, audioContextRef.current, 24000, 1);
+            
+            if (currentSourceRef.current) currentSourceRef.current.stop();
+            
+            const source = audioContextRef.current.createBufferSource();
+            source.buffer = audioBuffer;
+            source.connect(audioContextRef.current.destination);
+            source.start(0);
+            currentSourceRef.current = source;
+        }
+    } catch (e) {
+        console.error("Erro ao tocar áudio da API:", e);
     }
   };
 
@@ -58,7 +82,7 @@ export default function JabutiAssistant({ onClose }: { onClose: () => void }) {
             sources: result.sources 
         };
         setMessages(prev => [...prev, assistantMsg]);
-        speak(result.text);
+        await speak(result.text);
     } catch (err) {
         setMessages(prev => [...prev, { role: 'assistant', content: "Erro na conexão.", engine: "System" }]);
     } finally {
@@ -91,7 +115,7 @@ export default function JabutiAssistant({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="h-full flex flex-col bg-slate-950 border-l border-slate-800 shadow-2xl relative overflow-hidden">
-      <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-900/50">
+      <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-900/50 flex-shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10"><Jabuti state={isTyping ? 'thinking' : (isListening ? 'listening' : 'idle')} /></div>
           <div>

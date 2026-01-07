@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import Jabuti from '../Brand/Jabuti';
 import { SystemSettings, AIConfiguration, LocalModelDeployment } from '../../types';
@@ -24,7 +23,7 @@ const FloatingJabuti: React.FC<FloatingJabutiProps> = ({ onToggleChat, onActivat
 
   const handleMouseDown = () => {
     longPressTriggered.current = false;
-    pressTimer.current = setTimeout(() => {
+    pressTimer.current = window.setTimeout(() => {
       longPressTriggered.current = true;
       onActivateDirector();
     }, 700);

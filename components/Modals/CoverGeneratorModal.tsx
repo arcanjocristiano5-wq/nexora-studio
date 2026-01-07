@@ -1,9 +1,7 @@
-
-
-
 import React, { useState, useEffect } from 'react';
 import { generateConceptArt, generateVideoMetadata, analyzeAndSelectBestPost } from '../../services/geminiService';
 import { AnalysisResult, VideoMetadata } from '../../types';
+import { Icons } from '../../constants';
 
 interface CoverGeneratorModalProps {
   isOpen: boolean;
@@ -11,7 +9,6 @@ interface CoverGeneratorModalProps {
   title: string;
   promptText: string;
   genre: string;
-  // FIX: Add creativeBrief to ensure correct context is passed to the metadata generation service.
   creativeBrief: string;
 }
 
@@ -30,7 +27,7 @@ const CoverGeneratorModal: React.FC<CoverGeneratorModalProps> = ({ isOpen, onClo
       handleGenerateAll();
     } else {
       document.body.style.overflow = 'auto';
-      setAnalysisResult(null); // Reset analysis on close
+      setAnalysisResult(null); 
     }
     return () => { document.body.style.overflow = 'auto' };
   }, [isOpen]);
@@ -58,7 +55,6 @@ const CoverGeneratorModal: React.FC<CoverGeneratorModalProps> = ({ isOpen, onClo
     }
 
     try {
-      // FIX: Pass the creativeBrief instead of genre for more accurate metadata.
       const generatedMeta = await generateVideoMetadata(title, promptText, creativeBrief);
       setMetadata(generatedMeta);
     } catch (error) {
@@ -84,8 +80,11 @@ const CoverGeneratorModal: React.FC<CoverGeneratorModalProps> = ({ isOpen, onClo
   };
 
   const handleCopy = () => {
-    if (!metadata) return;
-    const textToCopy = `...`; // Lógica de cópia mantida como antes
+    if (!metadata || !analysisResult) return;
+    const textToCopy = `
+      Título: ${analysisResult.bestTitle}
+      Descrição: ${metadata.description}
+    `;
     navigator.clipboard.writeText(textToCopy.trim());
     setCopyButtonText('Copiado!');
     setTimeout(() => setCopyButtonText('Copiar Tudo'), 2000);
@@ -110,7 +109,6 @@ const CoverGeneratorModal: React.FC<CoverGeneratorModalProps> = ({ isOpen, onClo
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in duration-300" onClick={onClose}>
       <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl animate-in zoom-in-95 duration-300" onClick={(e) => e.stopPropagation()}>
-        {/* ... cabeçalho do modal ... */}
         <div className="p-6 border-b border-slate-800 flex justify-between items-center">
           <div>
             <h3 className="text-xl font-bold text-white">Pacote de Mídia para "{title}"</h3>
@@ -157,7 +155,6 @@ const CoverGeneratorModal: React.FC<CoverGeneratorModalProps> = ({ isOpen, onClo
                     ))}
                   </div>
                 </div>
-                {/* ... o resto dos metadados ... */}
                 <div>
                   <label className="text-sm font-bold text-slate-300 mb-2 block">Descrição</label>
                   <p className="text-sm text-slate-400 bg-slate-800/50 p-4 rounded-xl border border-slate-700/50 max-h-40 overflow-y-auto">{metadata.description}</p>
@@ -179,15 +176,16 @@ const CoverGeneratorModal: React.FC<CoverGeneratorModalProps> = ({ isOpen, onClo
           <button 
             onClick={handleAnalyze}
             disabled={!allGenerated || isAnalyzing || !!analysisResult}
-            className="flex items-center gap-2 px-6 py-2.5 bg-slate-800 hover:bg-slate-700 rounded-xl text-sm font-bold transition-all disabled:opacity-50"
+            className="flex items-center gap-2 px-6 py-2.5 bg-slate-800 hover:bg-slate-700 rounded-xl text-sm font-bold transition-all disabled:opacity-50 text-white"
           >
-            {isAnalyzing ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : 'Analisar com Jabuti'}
+            {isAnalyzing ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Icons.Sparkles />}
+            {isAnalyzing ? 'Analisando...' : 'Analisar com Jabuti'}
           </button>
           
           {analysisResult ? (
-             <button onClick={handlePost} className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 rounded-xl text-sm font-bold transition-all">Agendar Postagem</button>
+             <button onClick={handlePost} className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 rounded-xl text-sm font-bold transition-all text-white">Agendar Postagem</button>
           ) : (
-             <button onClick={handleCopy} disabled={!allGenerated} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 rounded-xl text-sm font-bold transition-all disabled:opacity-50">{copyButtonText}</button>
+             <button onClick={handleCopy} disabled={!allGenerated} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 rounded-xl text-sm font-bold transition-all disabled:opacity-50 text-white">{copyButtonText}</button>
           )}
         </div>
       </div>
