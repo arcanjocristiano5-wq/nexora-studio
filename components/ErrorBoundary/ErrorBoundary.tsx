@@ -10,12 +10,20 @@ interface State {
   error: Error | null;
 }
 
-// FIX: To function as a React Error Boundary, this class must extend React.Component. This provides access to lifecycle methods, state (`this.setState`), and props (`this.props`).
+/**
+ * ErrorBoundary class component to catch rendering errors.
+ */
+// Fix: Extending React.Component explicitly to ensure inheritance of setState and props is recognized
 class ErrorBoundary extends React.Component<Props, State> {
+  // State initialization with property initializer
   public state: State = {
     hasError: false,
     error: null,
   };
+
+  constructor(props: Props) {
+    super(props);
+  }
 
   public static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
@@ -25,7 +33,9 @@ class ErrorBoundary extends React.Component<Props, State> {
     console.error("Jabuti detectou anomalia crítica:", error, errorInfo);
   }
   
+  // handleReset method correctly uses this.setState inherited from the Component class
   private handleReset = () => {
+    // Fix: Using this.setState inherited from React.Component
     this.setState({ hasError: false, error: null });
     window.location.reload();
   }
@@ -42,6 +52,7 @@ class ErrorBoundary extends React.Component<Props, State> {
       );
     }
 
+    // Fix: Access children prop which is inherited from the base React.Component class
     return this.props.children;
   }
 }
